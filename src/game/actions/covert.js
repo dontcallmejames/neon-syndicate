@@ -2,8 +2,10 @@
 const { writeEvent } = require('../events');
 
 function getFortifyCreditCost(db, seasonId) {
-  const law = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1 ORDER BY rowid LIMIT 1").get(seasonId);
-  return (law && law.effect === 'fortify_discount') ? 4 : 8;
+  const law = db.prepare(
+    "SELECT id FROM laws WHERE season_id = ? AND is_active = 1 AND effect = 'fortify_discount' LIMIT 1"
+  ).get(seasonId);
+  return law ? 4 : 8;
 }
 
 function resolveCovert(db, seasonId, tick, covertActions) {

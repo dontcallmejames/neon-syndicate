@@ -90,3 +90,18 @@ test('fortify adds 5 to fortification_level (capped at 20)', () => {
   const d = db.prepare('SELECT fortification_level FROM districts WHERE id = ?').get(ownedDistrict.id);
   expect(d.fortification_level).toBe(20); // 17 + 5, but capped
 });
+
+test('fortify_discount law reduces fortify credit cost to 4', () => {
+  makeCorp('corp', 'C', { energy: 10, credits: 10 });
+  const ownedDistrict = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  db.prepare('UPDATE districts SET owner_id = ?, fortification_level = 0 WHERE id = ?').run('corp', ownedDistrict.id);
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'fortify_discount'").run(seasonId);
+
+  resolveCovert(db, seasonId, 1, [
+    { corpId: 'corp', action: { type: 'fortify', targetDistrictId: ownedDistrict.id } }
+  ]);
+
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get('corp');
+  expect(corp.energy).toBe(8); // 10 - 2
+  expect(corp.credits).toBe(6); // 10 - 4 (discount)
+});
