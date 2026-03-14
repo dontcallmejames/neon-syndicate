@@ -2,6 +2,11 @@
 const crypto = require('crypto');
 const { writeEvent } = require('./events');
 
+function calcVotes(credits, reputation) {
+  const costPerVote = reputation >= 75 ? 8 : 10;
+  return Math.floor(credits / costPerVote);
+}
+
 function checkPhase(db, seasonId, tick) {
   if (tick % 10 !== 0) return;
 
@@ -27,18 +32,14 @@ function checkPhase(db, seasonId, tick) {
   `).all(currentPhase.id);
 
   for (const v of allVoteRows) {
-    const costPerVote = v.reputation >= 75 ? 8 : 10;
-    const votes = Math.floor(v.credits / costPerVote);
-    voteMap[v.law_id] = (voteMap[v.law_id] || 0) + votes;
+    voteMap[v.law_id] = (voteMap[v.law_id] || 0) + calcVotes(v.credits, v.reputation);
   }
 
   // Government Quarter holder's votes are doubled (add their contribution a second time)
   if (govQuarter && govQuarter.owner_id) {
     const gqVoteRows = allVoteRows.filter(v => v.corp_id === govQuarter.owner_id);
     for (const v of gqVoteRows) {
-      const costPerVote = v.reputation >= 75 ? 8 : 10;
-      const votes = Math.floor(v.credits / costPerVote);
-      voteMap[v.law_id] = (voteMap[v.law_id] || 0) + votes; // add one more time = doubled
+      voteMap[v.law_id] = (voteMap[v.law_id] || 0) + calcVotes(v.credits, v.reputation); // add one more time = doubled
     }
   }
 
@@ -57,7 +58,7 @@ function checkPhase(db, seasonId, tick) {
     let cumulative = 0;
     for (const law of allLaws) {
       cumulative += (voteMap[law.id] || 0);
-      if (rand <= cumulative) {
+      if (rand < cumulative) {
         winner = law;
         break;
       }

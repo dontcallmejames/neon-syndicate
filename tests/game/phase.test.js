@@ -41,6 +41,7 @@ test('checkPhase closes the current phase and opens a new one', () => {
   expect(newPhase).toBeDefined();
   expect(newPhase.phase_number).toBe(2);
   expect(newPhase.start_tick).toBe(11);
+  expect(closedPhase.resolved_law_id).toBeDefined(); // winner's law id is recorded
 });
 
 test('voted law has higher probability of selection', () => {
