@@ -177,17 +177,21 @@ function startTickLoop(db) {
   _lastTick.time = Date.now();
 
   _interval = setInterval(async () => {
-    const s = conn.prepare(
-      "SELECT id, tick_interval_ms FROM seasons WHERE status = 'active' LIMIT 1"
-    ).get();
-    if (!s) return; // no active season yet — keep polling
+    try {
+      const s = conn.prepare(
+        "SELECT id, tick_interval_ms FROM seasons WHERE status = 'active' LIMIT 1"
+      ).get();
+      if (!s) return;
 
-    const now = Date.now();
-    if (now - _lastTick.time >= s.tick_interval_ms) {
-      _lastTick.time = now;
-      await runTick(conn, s.id);
+      const now = Date.now();
+      if (now - _lastTick.time >= s.tick_interval_ms) {
+        _lastTick.time = now;
+        await runTick(conn, s.id);
+      }
+    } catch (err) {
+      console.error('[tick] Unexpected error in tick loop:', err);
     }
-  }, 5000); // poll every 5 seconds
+  }, 5000);
 
   console.log('Tick loop started — polling every 5s for active season');
   return _interval;
