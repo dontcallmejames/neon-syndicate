@@ -9,6 +9,9 @@ jest.mock('../../src/api/routes/briefing', () => {
   const actual = jest.requireActual('../../src/api/routes/briefing');
   return Object.assign(actual, { buildAvailableActions: jest.fn().mockReturnValue([]) });
 });
+jest.mock('../../src/api/ws', () => ({
+  broadcast: jest.fn(),
+}));
 
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
@@ -185,4 +188,20 @@ test('runTick writes a headline event with tick = newTick', async () => {
   ).get(seasonId);
   expect(headline).toBeDefined();
   expect(headline.narrative).toContain('TEST HEADLINE');
+});
+
+test('runTick broadcasts tick_complete with correct tick number', async () => {
+  const { broadcast } = require('../../src/api/ws');
+  broadcast.mockClear();
+
+  await runTick(db, seasonId);
+
+  expect(broadcast).toHaveBeenCalledTimes(1);
+  const payload = broadcast.mock.calls[0][0];
+  expect(payload.type).toBe('tick_complete');
+  expect(payload.tick).toBe(1);
+  expect(Array.isArray(payload.districts)).toBe(true);
+  expect(Array.isArray(payload.corporations)).toBe(true);
+  expect(Array.isArray(payload.alliances)).toBe(true);
+  expect(Array.isArray(payload.headlines)).toBe(true);
 });

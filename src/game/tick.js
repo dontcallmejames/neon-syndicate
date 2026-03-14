@@ -7,6 +7,7 @@ const { resolveActions } = require('./actions/resolve');
 const { parseNLAction, generateNarratives, generateHeadlines, buildFallbackNarrative } = require('./gemini');
 const { buildAvailableActions } = require('../api/routes/briefing');
 const { writeEvent } = require('./events');
+const { broadcast } = require('../api/ws');
 
 function buildBriefingPayload(db, corp, season) {
   const holdings = db.prepare(
@@ -158,6 +159,74 @@ async function runTick(db, seasonId) {
     ).all(seasonId, newTick - 1);
     const headlines = await generateHeadlines(events, newTick);
     writeEvent(conn, { seasonId, tick: newTick, type: 'headline', narrative: headlines.join('\n') });
+
+    // Step 13: Broadcast tick_complete to WebSocket dashboard clients
+    const broadcastDistricts = conn.prepare(`
+      SELECT d.id, d.name, d.type, d.owner_id, c.name AS owner_name, d.fortification_level
+      FROM districts d LEFT JOIN corporations c ON c.id = d.owner_id
+      WHERE d.season_id = ?
+    `).all(seasonId);
+
+    const broadcastCorps = conn.prepare(`
+      SELECT id, name, reputation, credits, energy, workforce,
+             intelligence, influence, political_power
+      FROM corporations WHERE season_id = ? ORDER BY rowid ASC
+    `).all(seasonId).map(c => {
+      const districtCount = broadcastDistricts.filter(d => d.owner_id === c.id).length;
+      return {
+        id: c.id,
+        name: c.name,
+        valuation: calculateValuation(c, districtCount),
+        reputation: c.reputation,
+        reputationLabel:
+          c.reputation >= 75 ? 'Trusted' :
+          c.reputation >= 40 ? 'Neutral' :
+          c.reputation >= 15 ? 'Notorious' : 'Pariah',
+        districtCount,
+      };
+    });
+
+    const broadcastAlliances = conn.prepare(`
+      SELECT a.corp_a_id, a.corp_b_id, ca.name AS corp_a_name, cb.name AS corp_b_name
+      FROM alliances a
+      JOIN corporations ca ON ca.id = a.corp_a_id
+      JOIN corporations cb ON cb.id = a.corp_b_id
+      WHERE ca.season_id = ? AND cb.season_id = ?
+        AND a.formed_tick IS NOT NULL AND a.broken_tick IS NULL
+    `).all(seasonId, seasonId);
+
+    const broadcastLaw = conn.prepare(
+      'SELECT name, effect FROM laws WHERE season_id = ? AND is_active = 1'
+    ).get(seasonId);
+
+    const broadcastHeadlineEvent = conn.prepare(
+      "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' AND tick = ?"
+    ).get(seasonId, newTick);
+    const broadcastHeadlines = broadcastHeadlineEvent
+      ? broadcastHeadlineEvent.narrative.split('\n').filter(h => h.trim() !== '')
+      : [];
+
+    broadcast({
+      type: 'tick_complete',
+      tick: newTick,
+      districts: broadcastDistricts.map(d => ({
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        ownerId: d.owner_id,
+        ownerName: d.owner_name,
+        fortificationLevel: d.fortification_level,
+      })),
+      corporations: broadcastCorps,
+      alliances: broadcastAlliances.map(a => ({
+        corpAId: a.corp_a_id,
+        corpBId: a.corp_b_id,
+        corpAName: a.corp_a_name,
+        corpBName: a.corp_b_name,
+      })),
+      activeLaw: broadcastLaw || null,
+      headlines: broadcastHeadlines,
+    });
 
     console.log(`[tick ${newTick}] ${corps.length} corps updated`);
   } finally {
