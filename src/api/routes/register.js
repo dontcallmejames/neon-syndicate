@@ -1,6 +1,8 @@
 // src/api/routes/register.js
 const crypto = require('crypto');
 
+const CORP_DEFAULTS = { credits: 10, energy: 8, workforce: 6, intelligence: 4, influence: 0, political_power: 0 };
+
 module.exports = function registerRoute(db) {
   return (req, res) => {
     const { name, description = '' } = req.body;
@@ -34,8 +36,11 @@ module.exports = function registerRoute(db) {
     const corpId = crypto.randomUUID();
     const apiKey = crypto.randomUUID();
 
-    const CORP_DEFAULTS = { credits: 10, energy: 8, workforce: 6, intelligence: 4, influence: 0, political_power: 0 };
-    const sr = { ...CORP_DEFAULTS, ...JSON.parse(season.starting_resources || '{}') };
+    let srRaw = {};
+    try { srRaw = JSON.parse(season.starting_resources || '{}'); } catch (_) {}
+    const sr = Object.fromEntries(
+      Object.entries({ ...CORP_DEFAULTS, ...srRaw }).map(([k, v]) => [k, Math.max(0, Math.floor(Number(v) || 0))])
+    );
 
     db.prepare(`
       INSERT INTO corporations
