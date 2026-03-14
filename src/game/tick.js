@@ -4,6 +4,9 @@ const { getDb } = require('../db/index');
 const { generateResources } = require('./resources');
 const { calculateValuation } = require('./valuation');
 const { resolveActions } = require('./actions/resolve');
+const { parseNLAction, generateNarratives, generateHeadlines, buildFallbackNarrative } = require('./gemini');
+const { buildAvailableActions } = require('../api/routes/briefing');
+const { writeEvent } = require('./events');
 
 function buildBriefingPayload(db, corp, season) {
   const holdings = db.prepare(
@@ -71,11 +74,11 @@ function buildBriefingPayload(db, corp, season) {
     pendingAlliances,
     activeLaw: activeLaw || null,
     availableActions: [],
-    narrative: null, // TODO Plan 4
+    narrative: null,
   };
 }
 
-function runTick(db, seasonId) {
+async function runTick(db, seasonId) {
   const conn = db || getDb();
   const season = conn.prepare('SELECT * FROM seasons WHERE id = ?').get(seasonId);
   if (!season || season.status !== 'active') return;
@@ -89,15 +92,57 @@ function runTick(db, seasonId) {
   // Step 2: Resource generation (includes Workforce enforcement)
   generateResources(conn, seasonId, newTick);
 
-  // Steps 3-7: Action resolution — resolve actions submitted during the tick that just ended
+  // Step 3: Parse NL submissions for tick that just ended (newTick - 1)
+  const pendingNLActions = conn.prepare(`
+    SELECT pa.*, c.reputation, c.credits, c.energy, c.workforce, c.intelligence, c.influence, c.political_power, c.name AS corp_name
+    FROM pending_actions pa
+    JOIN corporations c ON c.id = pa.corp_id
+    WHERE pa.tick = ? AND pa.raw_response IS NOT NULL
+      AND pa.parsed_actions IS NULL AND pa.status = 'pending'
+  `).all(newTick - 1);
+
+  for (const row of pendingNLActions) {
+    const corp = {
+      id: row.corp_id,
+      name: row.corp_name,
+      reputation: row.reputation,
+      credits: row.credits,
+      energy: row.energy,
+      workforce: row.workforce,
+      intelligence: row.intelligence,
+      influence: row.influence,
+      political_power: row.political_power,
+    };
+    const availableActions = buildAvailableActions(corp.reputation < 15);
+    const result = await parseNLAction(row.raw_response, availableActions, corp);
+    if (result !== null) {
+      conn.prepare('UPDATE pending_actions SET parsed_actions = ? WHERE id = ?')
+        .run(JSON.stringify(result), row.id);
+    } else {
+      conn.prepare("UPDATE pending_actions SET status = 'rejected' WHERE id = ?")
+        .run(row.id);
+    }
+  }
+
+  // Step 4: Action resolution — resolve actions submitted during the tick that just ended
   resolveActions(conn, seasonId, newTick - 1);
 
-  // Step 8: Store briefings for all corps
+  // Step 5: Build briefing payloads for all corps
   const corps = conn.prepare('SELECT * FROM corporations WHERE season_id = ?').all(seasonId);
+  const corpPayloadPairs = corps.map(corp => ({
+    corp,
+    payload: buildBriefingPayload(conn, corp, updatedSeason),
+  }));
 
+  // Step 6: Generate narratives via Gemini
+  const narratives = await generateNarratives(corpPayloadPairs);
+  for (const { corp, payload } of corpPayloadPairs) {
+    payload.narrative = narratives[corp.id] ?? buildFallbackNarrative(corp, payload);
+  }
+
+  // Step 7: INSERT OR REPLACE briefings into DB
   conn.transaction(() => {
-    for (const corp of corps) {
-      const payload = buildBriefingPayload(conn, corp, updatedSeason);
+    for (const { corp, payload } of corpPayloadPairs) {
       // INSERT OR REPLACE on UNIQUE(corp_id, tick): deletes old row then inserts new.
       conn.prepare(`
         INSERT OR REPLACE INTO briefings (id, corp_id, tick, payload)
@@ -106,7 +151,14 @@ function runTick(db, seasonId) {
     }
   })();
 
-  // Clear is_ticking flag — briefings are now ready
+  // Step 8: Generate and write headlines
+  const events = conn.prepare(
+    'SELECT * FROM events WHERE season_id = ? AND tick = ?'
+  ).all(seasonId, newTick - 1);
+  const headlines = await generateHeadlines(events, newTick);
+  writeEvent(conn, { seasonId, tick: newTick, type: 'headline', narrative: headlines.join('\n') });
+
+  // Step 9: Clear is_ticking flag — briefings are now ready
   conn.prepare('UPDATE seasons SET is_ticking = 0 WHERE id = ?').run(seasonId);
 
   console.log(`[tick ${newTick}] ${corps.length} corps updated`);
@@ -124,7 +176,7 @@ function startTickLoop(db) {
   if (_interval) clearInterval(_interval);
   _lastTick.time = Date.now();
 
-  _interval = setInterval(() => {
+  _interval = setInterval(async () => {
     const s = conn.prepare(
       "SELECT id, tick_interval_ms FROM seasons WHERE status = 'active' LIMIT 1"
     ).get();
@@ -133,7 +185,7 @@ function startTickLoop(db) {
     const now = Date.now();
     if (now - _lastTick.time >= s.tick_interval_ms) {
       _lastTick.time = now;
-      runTick(conn, s.id);
+      await runTick(conn, s.id);
     }
   }, 5000); // poll every 5 seconds
 
