@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Syndicate — Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #030712; color: #e5e7eb; font-family: monospace; font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Header */
+    #header { background: #0a0a1a; border-bottom: 1px solid #1f2937; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    #header-title { color: #a78bfa; font-size: 13px; font-weight: bold; letter-spacing: 2px; }
+    #header-right { color: #4b5563; font-size: 11px; }
+    #tick-display { color: #6366f1; }
+    #live-dot { color: #22c55e; }
+    #reconnecting { color: #f59e0b; display: none; }
+
+    /* Tabs */
+    #tab-bar { background: #0a0a1a; border-bottom: 1px solid #1f2937; display: flex; flex-shrink: 0; }
+    .tab { padding: 8px 16px; cursor: pointer; color: #4b5563; font-size: 11px; letter-spacing: 1px; border-bottom: 2px solid transparent; }
+    .tab:hover { color: #9ca3af; }
+    .tab.active { color: #a78bfa; border-bottom-color: #7c3aed; }
+
+    /* Content */
+    #content { flex: 1; overflow-y: auto; padding: 16px; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Key prompt overlay */
+    #key-overlay { position: fixed; inset: 0; background: #030712; display: flex; align-items: center; justify-content: center; z-index: 100; }
+    #key-box { background: #0a0a1a; border: 1px solid #1f2937; border-radius: 8px; padding: 24px; min-width: 320px; }
+    #key-box h2 { color: #a78bfa; font-size: 13px; letter-spacing: 2px; margin-bottom: 16px; }
+    #key-error { color: #ef4444; font-size: 11px; margin-bottom: 8px; display: none; }
+    #key-input { background: #030712; border: 1px solid #374151; color: #e5e7eb; padding: 8px; width: 100%; font-family: monospace; font-size: 12px; border-radius: 4px; margin-bottom: 8px; }
+    #key-submit { background: #4c1d95; border: none; color: #e9d5ff; padding: 8px 16px; cursor: pointer; font-family: monospace; border-radius: 4px; width: 100%; }
+    #key-submit:hover { background: #5b21b6; }
+
+    /* Panels */
+    .panel { background: #0a0a1a; border: 1px solid #1f2937; border-radius: 6px; padding: 14px; margin-bottom: 12px; }
+    .panel-title { color: #6b7280; font-size: 9px; letter-spacing: 1px; margin-bottom: 10px; }
+    .status-badge { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 10px; letter-spacing: 1px; margin-left: 8px; }
+    .status-pending { background: #1f2937; color: #9ca3af; }
+    .status-active  { background: #14532d; color: #86efac; }
+    .status-paused  { background: #422006; color: #fbbf24; }
+    .status-ended   { background: #1f2937; color: #6b7280; }
+
+    /* Buttons */
+    .btn { background: #0a0a1a; border: 1px solid #374151; color: #9ca3af; padding: 5px 12px; cursor: pointer; font-family: monospace; font-size: 11px; border-radius: 4px; margin-right: 6px; }
+    .btn:hover { border-color: #6366f1; color: #a78bfa; }
+    .btn-danger:hover { border-color: #ef4444; color: #ef4444; }
+    .btn-primary { border-color: #6366f1; color: #6366f1; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Forms */
+    .form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .form-row label { color: #6b7280; font-size: 10px; width: 120px; flex-shrink: 0; }
+    .form-row input, .form-row select, .form-row textarea {
+      background: #030712; border: 1px solid #374151; color: #e5e7eb;
+      padding: 5px 8px; font-family: monospace; font-size: 11px; border-radius: 4px; flex: 1;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    .form-section { border: 1px solid #1f2937; border-radius: 4px; padding: 10px; margin-top: 10px; }
+    .form-section h4 { color: #6b7280; font-size: 9px; letter-spacing: 1px; margin-bottom: 8px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; }
+    th { color: #6b7280; font-size: 9px; letter-spacing: 1px; text-align: left; padding: 6px 8px; border-bottom: 1px solid #1f2937; }
+    td { padding: 6px 8px; border-bottom: 1px solid #111827; font-size: 11px; vertical-align: middle; }
+    tr:hover td { background: #0d1117; }
+    .corp-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+
+    /* Stat row */
+    .stat-row { display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+    .stat { color: #6b7280; font-size: 10px; }
+    .stat span { color: #e5e7eb; margin-left: 4px; }
+
+    /* Adjust form inline */
+    .adjust-form { display: none; background: #030712; border: 1px solid #1f2937; border-radius: 4px; padding: 8px; margin-top: 6px; }
+    .adjust-form.open { display: block; }
+    .adjust-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+    .adjust-row label { color: #6b7280; font-size: 10px; width: 100px; }
+    .adjust-row input { background: #0a0a1a; border: 1px solid #374151; color: #e5e7eb; padding: 3px 6px; font-family: monospace; font-size: 11px; border-radius: 3px; width: 80px; }
+
+    #no-season-msg { color: #4b5563; font-size: 11px; padding: 16px 0; }
+    .load-more { margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<!-- Key prompt -->
+<div id="key-overlay">
+  <div id="key-box">
+    <h2>NEON SYNDICATE — ADMIN</h2>
+    <div id="key-error"></div>
+    <input id="key-input" type="password" placeholder="Enter admin key..." autocomplete="off">
+    <button id="key-submit">AUTHENTICATE</button>
+  </div>
+</div>
+
+<!-- Header -->
+<div id="header">
+  <div id="header-title">NEON SYNDICATE — ADMIN</div>
+  <div id="header-right">
+    TICK <span id="tick-display">—</span> &nbsp;·&nbsp;
+    <span id="live-dot">● LIVE</span>
+    <span id="reconnecting">⟳ RECONNECTING…</span>
+  </div>
+</div>
+
+<!-- Tab bar -->
+<div id="tab-bar">
+  <div class="tab active" data-tab="season">SEASON</div>
+  <div class="tab" data-tab="corps">CORPS</div>
+  <div class="tab" data-tab="laws">LAWS</div>
+  <div class="tab" data-tab="events">EVENTS</div>
+  <div class="tab" data-tab="log">LOG</div>
+</div>
+
+<!-- Content -->
+<div id="content">
+  <!-- SEASON tab -->
+  <div id="tab-season" class="tab-pane active">
+    <div class="panel">
+      <div class="panel-title">CURRENT SEASON</div>
+      <div id="season-info"><span style="color:#4b5563">No season</span></div>
+      <div id="season-actions" style="margin-top:10px;"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">CREATE NEW SEASON</div>
+      <div class="form-section">
+        <h4>BASIC</h4>
+        <div class="form-row"><label>Season length (ticks)</label><input id="f-length" type="number" value="100"></div>
+        <div class="form-row"><label>Tick interval (ms)</label><input id="f-interval" type="number" value="60000"></div>
+      </div>
+      <div class="form-section" style="margin-top:8px;">
+        <h4>SCORING WEIGHTS</h4>
+        <div class="form-row"><label>Credits</label><input id="sc-credits" type="number" value="1"></div>
+        <div class="form-row"><label>Energy</label><input id="sc-energy" type="number" value="1"></div>
+        <div class="form-row"><label>Workforce</label><input id="sc-workforce" type="number" value="1"></div>
+        <div class="form-row"><label>Intelligence</label><input id="sc-intelligence" type="number" value="1"></div>
+        <div class="form-row"><label>Influence</label><input id="sc-influence" type="number" value="1"></div>
+        <div class="form-row"><label>Political Power</label><input id="sc-political_power" type="number" value="1"></div>
+        <div class="form-row"><label>Districts</label><input id="sc-districts" type="number" value="10"></div>
+      </div>
+      <div class="form-section" style="margin-top:8px;">
+        <h4>STARTING RESOURCES PER CORP</h4>
+        <div class="form-row"><label>Credits</label><input id="sr-credits" type="number" value="10"></div>
+        <div class="form-row"><label>Energy</label><input id="sr-energy" type="number" value="8"></div>
+        <div class="form-row"><label>Workforce</label><input id="sr-workforce" type="number" value="6"></div>
+        <div class="form-row"><label>Intelligence</label><input id="sr-intelligence" type="number" value="4"></div>
+        <div class="form-row"><label>Influence</label><input id="sr-influence" type="number" value="0"></div>
+        <div class="form-row"><label>Political Power</label><input id="sr-political_power" type="number" value="0"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn btn-primary" id="btn-create-season">CREATE SEASON</button>
+        <span id="create-msg" style="color:#6b7280;font-size:10px;margin-left:8px;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CORPS tab -->
+  <div id="tab-corps" class="tab-pane">
+    <div id="no-corps-msg" class="panel" style="display:none"><div id="no-season-msg">No active or paused season.</div></div>
+    <div class="panel" id="corps-panel">
+      <div class="panel-title">CORPORATIONS</div>
+      <table id="corps-table">
+        <thead><tr>
+          <th>#</th><th>CORP</th><th>CREDITS</th><th>ENERGY</th><th>WF</th>
+          <th>INT</th><th>INF</th><th>POL</th><th>REP</th><th>DIST</th><th></th>
+        </tr></thead>
+        <tbody id="corps-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- LAWS tab -->
+  <div id="tab-laws" class="tab-pane">
+    <div class="panel">
+      <div class="panel-title">ACTIVE LAW</div>
+      <div id="active-law-display" style="color:#fbbf24;font-size:12px;margin-bottom:10px;">No active law</div>
+      <button class="btn btn-danger" id="btn-repeal" style="display:none">REPEAL</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">ENACT LAW</div>
+      <div class="form-row"><label>Name</label><input id="law-name" type="text" placeholder="Law name"></div>
+      <div class="form-row"><label>Effect</label><input id="law-effect" type="text" placeholder="effect_key"></div>
+      <button class="btn btn-primary" id="btn-enact" style="margin-top:8px;">ENACT</button>
+      <span id="law-msg" style="color:#6b7280;font-size:10px;margin-left:8px;"></span>
+    </div>
+  </div>
+
+  <!-- EVENTS tab -->
+  <div id="tab-events" class="tab-pane">
+    <div class="panel">
+      <div class="panel-title">INJECT EVENT</div>
+      <div class="form-row">
+        <label>Type</label>
+        <select id="event-type">
+          <option value="headline">headline</option>
+          <option value="action">action</option>
+          <option value="system">system</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Narrative</label><textarea id="event-narrative" placeholder="Event narrative…"></textarea></div>
+      <button class="btn btn-primary" id="btn-inject" style="margin-top:8px;">INJECT</button>
+      <span id="event-msg" style="color:#6b7280;font-size:10px;margin-left:8px;"></span>
+    </div>
+    <div class="panel">
+      <div class="panel-title">RECENT EVENTS</div>
+      <table>
+        <thead><tr><th>TICK</th><th>TYPE</th><th>NARRATIVE</th></tr></thead>
+        <tbody id="events-preview-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- LOG tab -->
+  <div id="tab-log" class="tab-pane">
+    <div class="panel">
+      <div class="panel-title">EVENT LOG</div>
+      <table>
+        <thead><tr><th>TICK</th><th>TYPE</th><th>NARRATIVE</th></tr></thead>
+        <tbody id="log-tbody"></tbody>
+      </table>
+      <button class="btn load-more" id="btn-load-more">LOAD MORE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CORP_COLORS = ['#7c3aed','#2563eb','#db2777','#16a34a','#ea580c','#0891b2','#ca8a04','#dc2626'];
+let adminKey = null;
+let state = null;
+let corpColors = {};
+let logOffset = 0;
+const ACTIVE_STATUSES = ['active', 'paused'];
+
+// --- Auth ---
+function getKey() { return localStorage.getItem('adminKey'); }
+function setKey(k) { localStorage.setItem('adminKey', k); adminKey = k; }
+function clearKey() { localStorage.removeItem('adminKey'); adminKey = null; }
+
+async function apiFetch(path, opts = {}) {
+  return fetch(path, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${adminKey}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+}
+
+async function validateKey(key) {
+  const res = await fetch('/admin/state', { headers: { 'Authorization': `Bearer ${key}` } });
+  return res;
+}
+
+document.getElementById('key-submit').addEventListener('click', async () => {
+  const key = document.getElementById('key-input').value.trim();
+  const errEl = document.getElementById('key-error');
+  errEl.style.display = 'none';
+  if (!key) return;
+
+  const res = await validateKey(key);
+  if (res.status === 401) {
+    errEl.textContent = 'Invalid key — try again';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (res.status === 503) {
+    errEl.textContent = 'Admin interface is disabled on this server (ADMIN_KEY not configured)';
+    errEl.style.display = 'block';
+    return;
+  }
+  setKey(key);
+  document.getElementById('key-overlay').style.display = 'none';
+  state = await res.json();
+  init();
+});
+
+document.getElementById('key-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('key-submit').click();
+});
+
+// --- Init ---
+async function init() {
+  assignCorpColors(state.corps);
+  renderAll();
+  connect();
+}
+
+function assignCorpColors(corps) {
+  corps.forEach((c, i) => {
+    if (!corpColors[c.id]) corpColors[c.id] = CORP_COLORS[Object.keys(corpColors).length % 8];
+  });
+}
+
+async function refreshState() {
+  const res = await apiFetch('/admin/state');
+  if (res.ok) {
+    state = await res.json();
+    assignCorpColors(state.corps);
+    renderAll();
+  }
+}
+
+// --- Tabs ---
+const tabs = document.querySelectorAll('.tab');
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+    if (tab.dataset.tab === 'log') { logOffset = 0; loadLog(); }
+    if (tab.dataset.tab === 'events') renderEventsPreview();
+  });
+});
+
+// --- Render ---
+function renderAll() {
+  renderSeason();
+  renderCorps();
+  renderLaws();
+  renderEventsPreview();
+  updateHeader();
+}
+
+function updateHeader() {
+  const tick = state.season ? state.season.tick_count : '—';
+  document.getElementById('tick-display').textContent = tick;
+}
+
+function renderSeason() {
+  const s = state.season;
+  const infoEl = document.getElementById('season-info');
+  const actionsEl = document.getElementById('season-actions');
+
+  if (!s) {
+    infoEl.innerHTML = '<span style="color:#4b5563">No season</span>';
+    actionsEl.innerHTML = '';
+    return;
+  }
+
+  const statusClass = `status-${s.status}`;
+  infoEl.innerHTML = `
+    <div class="stat-row">
+      <div class="stat">STATUS <span><span class="status-badge ${statusClass}">${s.status.toUpperCase()}</span></span></div>
+      <div class="stat">TICK <span>${s.tick_count} / ${s.season_length}</span></div>
+      <div class="stat">INTERVAL <span>${(s.tick_interval_ms / 1000).toFixed(0)}s</span></div>
+      ${s.is_ticking ? '<div class="stat" style="color:#f59e0b">⟳ TICKING</div>' : ''}
+    </div>
+  `;
+
+  let btns = '';
+  if (s.status === 'pending') btns += `<button class="btn btn-primary" onclick="lifecycle('start')">START SEASON</button>`;
+  if (s.status === 'active')  btns += `<button class="btn" onclick="lifecycle('pause')">PAUSE</button>`;
+  if (s.status === 'paused')  btns += `<button class="btn btn-primary" onclick="lifecycle('resume')">RESUME</button>`;
+  if (ACTIVE_STATUSES.includes(s.status)) btns += `<button class="btn btn-danger" onclick="lifecycle('end')">END SEASON</button>`;
+  if (s.status === 'active')  btns += `<button class="btn btn-primary" id="btn-tick" onclick="manualTick()" ${s.is_ticking ? 'disabled' : ''}>⚡ RUN TICK NOW</button>`;
+
+  actionsEl.innerHTML = btns;
+}
+
+async function lifecycle(action) {
+  if (!state.season) return;
+  const res = await apiFetch(`/admin/seasons/${state.season.id}/${action}`, { method: 'POST', body: {} });
+  if (!res.ok) { const b = await res.json(); alert(b.error || 'Error'); return; }
+  await refreshState();
+}
+
+async function manualTick() {
+  if (!state.season) return;
+  const btn = document.getElementById('btn-tick');
+  if (btn) btn.disabled = true;
+  const res = await apiFetch(`/admin/seasons/${state.season.id}/tick`, { method: 'POST', body: {} });
+  if (!res.ok) { const b = await res.json(); alert(b.error || 'Error'); }
+  await refreshState();
+}
+
+function renderCorps() {
+  const tbody = document.getElementById('corps-tbody');
+  const corps = state.corps || [];
+  if (!corps.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="color:#4b5563;text-align:center">No corporations registered</td></tr>';
+    return;
+  }
+  tbody.innerHTML = corps.map((c, i) => `
+    <tr>
+      <td style="color:#6b7280">${i + 1}</td>
+      <td><span class="corp-dot" style="background:${corpColors[c.id] || '#6b7280'}"></span>${escHtml(c.name)}</td>
+      <td>${c.credits}</td><td>${c.energy}</td><td>${c.workforce}</td>
+      <td>${c.intelligence}</td><td>${c.influence}</td><td>${c.political_power}</td>
+      <td>${c.reputation}</td><td>${c.districtCount}</td>
+      <td>
+        <button class="btn" onclick="toggleAdjust('${c.id}')">ADJUST</button>
+        <button class="btn btn-danger" onclick="banCorp('${c.id}','${escHtml(c.name)}')">BAN</button>
+        <div class="adjust-form" id="adj-${c.id}">
+          ${['credits','energy','workforce','intelligence','influence','political_power','reputation'].map(f =>
+            `<div class="adjust-row"><label>${f}</label><input type="number" id="adj-${c.id}-${f}" value="0"></div>`
+          ).join('')}
+          <button class="btn btn-primary" onclick="applyAdjust('${c.id}')">APPLY DELTA</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleAdjust(id) {
+  const el = document.getElementById(`adj-${id}`);
+  el.classList.toggle('open');
+}
+
+async function applyAdjust(corpId) {
+  const fields = ['credits','energy','workforce','intelligence','influence','political_power','reputation'];
+  const body = {};
+  fields.forEach(f => {
+    const v = parseInt(document.getElementById(`adj-${corpId}-${f}`).value);
+    if (v !== 0) body[f] = v;
+  });
+  const res = await apiFetch(`/admin/corps/${corpId}`, { method: 'PATCH', body });
+  if (!res.ok) { const b = await res.json(); alert(b.error || 'Error'); return; }
+  await refreshState();
+}
+
+async function banCorp(id, name) {
+  if (!confirm(`Ban ${name}? This will remove the corp and unclaim their districts.`)) return;
+  const res = await apiFetch(`/admin/corps/${id}`, { method: 'DELETE' });
+  if (!res.ok) { const b = await res.json(); alert(b.error || 'Error'); return; }
+  await refreshState();
+}
+
+function renderLaws() {
+  const law = state.activeLaw;
+  const el = document.getElementById('active-law-display');
+  const repealBtn = document.getElementById('btn-repeal');
+  if (law) {
+    el.textContent = `⚖️ ${law.name} — ${law.effect}`;
+    repealBtn.style.display = 'inline-block';
+    repealBtn.onclick = async () => {
+      const res = await apiFetch(`/admin/laws/${law.id}`, { method: 'DELETE' });
+      if (!res.ok) { const b = await res.json(); alert(b.error || 'Error'); return; }
+      await refreshState();
+    };
+  } else {
+    el.textContent = 'No active law';
+    repealBtn.style.display = 'none';
+  }
+}
+
+function renderEventsPreview() {
+  const events = (state.recentEvents || []).slice(0, 10);
+  const tbody = document.getElementById('events-preview-tbody');
+  tbody.innerHTML = events.map(e => `
+    <tr>
+      <td style="color:#6b7280">${e.tick}</td>
+      <td style="color:#6366f1">${e.type}</td>
+      <td title="${escHtml(e.narrative)}">${escHtml(e.narrative.substring(0, 80))}${e.narrative.length > 80 ? '…' : ''}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="3" style="color:#4b5563">No events</td></tr>';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// --- Laws form ---
+document.getElementById('btn-enact').addEventListener('click', async () => {
+  const name = document.getElementById('law-name').value.trim();
+  const effect = document.getElementById('law-effect').value.trim();
+  const msg = document.getElementById('law-msg');
+  const res = await apiFetch('/admin/laws', { method: 'POST', body: { name, effect } });
+  const b = await res.json();
+  msg.textContent = res.ok ? 'Law enacted.' : (b.error || 'Error');
+  msg.style.color = res.ok ? '#22c55e' : '#ef4444';
+  if (res.ok) { await refreshState(); }
+});
+
+// --- Events form ---
+document.getElementById('btn-inject').addEventListener('click', async () => {
+  const type = document.getElementById('event-type').value;
+  const narrative = document.getElementById('event-narrative').value.trim();
+  const msg = document.getElementById('event-msg');
+  const res = await apiFetch('/admin/events', { method: 'POST', body: { type, narrative } });
+  const b = await res.json();
+  msg.textContent = res.ok ? 'Event injected.' : (b.error || 'Error');
+  msg.style.color = res.ok ? '#22c55e' : '#ef4444';
+  if (res.ok) { await refreshState(); }
+});
+
+// --- Season form ---
+document.getElementById('btn-create-season').addEventListener('click', async () => {
+  const msg = document.getElementById('create-msg');
+  const body = {
+    season_length: parseInt(document.getElementById('f-length').value),
+    tick_interval_ms: parseInt(document.getElementById('f-interval').value),
+    scoring: {
+      credits: +document.getElementById('sc-credits').value,
+      energy: +document.getElementById('sc-energy').value,
+      workforce: +document.getElementById('sc-workforce').value,
+      intelligence: +document.getElementById('sc-intelligence').value,
+      influence: +document.getElementById('sc-influence').value,
+      political_power: +document.getElementById('sc-political_power').value,
+      districts: +document.getElementById('sc-districts').value,
+    },
+    starting_resources: {
+      credits: +document.getElementById('sr-credits').value,
+      energy: +document.getElementById('sr-energy').value,
+      workforce: +document.getElementById('sr-workforce').value,
+      intelligence: +document.getElementById('sr-intelligence').value,
+      influence: +document.getElementById('sr-influence').value,
+      political_power: +document.getElementById('sr-political_power').value,
+    },
+  };
+  const res = await apiFetch('/admin/seasons', { method: 'POST', body });
+  const b = await res.json();
+  msg.textContent = res.ok ? `Season ${b.id.slice(0,8)}… created.` : (b.error || 'Error');
+  msg.style.color = res.ok ? '#22c55e' : '#ef4444';
+  if (res.ok) await refreshState();
+});
+
+// --- Log tab ---
+async function loadLog(append = false) {
+  if (!state.season) return;
+  const res = await apiFetch(`/admin/events?limit=50&offset=${logOffset}`);
+  if (!res.ok) return;
+  const events = await res.json();
+  const tbody = document.getElementById('log-tbody');
+  const rows = events.map(e => `
+    <tr>
+      <td style="color:#6b7280">${e.tick}</td>
+      <td style="color:#6366f1">${e.type}</td>
+      <td>${escHtml(e.narrative)}</td>
+    </tr>
+  `).join('');
+  if (append) tbody.innerHTML += rows;
+  else tbody.innerHTML = rows || '<tr><td colspan="3" style="color:#4b5563">No events</td></tr>';
+  logOffset += events.length;
+  document.getElementById('btn-load-more').style.display = events.length < 50 ? 'none' : 'inline-block';
+}
+
+document.getElementById('btn-load-more').addEventListener('click', () => loadLog(true));
+
+// --- WebSocket (copied from public/index.html pattern) ---
+let retryMs = 500;
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    retryMs = 500;
+    document.getElementById('reconnecting').style.display = 'none';
+    document.getElementById('live-dot').style.display = 'inline';
+  };
+  ws.onmessage = async (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type !== 'tick_complete') return;
+    document.getElementById('tick-display').textContent = msg.tick;
+    // Refresh state on tick if relevant tab is active
+    const activeTab = document.querySelector('.tab.active')?.dataset?.tab;
+    if (['season','corps'].includes(activeTab)) {
+      await refreshState();
+    } else {
+      // Silently refresh state in background for other tabs
+      const res = await apiFetch('/admin/state');
+      if (res.ok) { state = await res.json(); assignCorpColors(state.corps); updateHeader(); }
+    }
+  };
+  ws.onclose = () => {
+    document.getElementById('reconnecting').style.display = 'inline';
+    document.getElementById('live-dot').style.display = 'none';
+    setTimeout(connect, Math.min(retryMs *= 2, 5000));
+  };
+}
+
+// --- Boot ---
+const savedKey = getKey();
+if (savedKey) {
+  adminKey = savedKey;
+  validateKey(savedKey).then(async res => {
+    if (res.status === 401) { clearKey(); return; }
+    if (res.status === 503) {
+      document.getElementById('key-error').textContent = 'Admin interface is disabled on this server (ADMIN_KEY not configured)';
+      document.getElementById('key-error').style.display = 'block';
+      return;
+    }
+    document.getElementById('key-overlay').style.display = 'none';
+    state = await res.json();
+    init();
+  });
+}
+</script>
+</body>
+</html>
