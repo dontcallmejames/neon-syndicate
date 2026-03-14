@@ -209,3 +209,15 @@ test('runTick broadcasts tick_complete with correct tick number', async () => {
   expect(payload.corporations[0]).toHaveProperty('valuation');
   expect(payload.corporations[0]).toHaveProperty('reputationLabel');
 });
+
+test('runTick completes normally even if broadcast throws', async () => {
+  const { broadcast } = require('../../src/api/ws');
+  broadcast.mockImplementationOnce(() => { throw new Error('ws error'); });
+
+  // runTick should not reject even if broadcast throws
+  await expect(runTick(db, seasonId)).resolves.not.toThrow();
+
+  // is_ticking must be cleared
+  const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(seasonId);
+  expect(season.is_ticking).toBe(0);
+});

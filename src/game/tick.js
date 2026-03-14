@@ -202,28 +202,32 @@ async function runTick(db, seasonId) {
     // Use the in-memory headlines array rather than re-querying what we just wrote
     const broadcastHeadlines = Array.isArray(headlines) ? headlines.filter(h => h.trim() !== '') : [];
 
-    broadcast({
-      type: 'tick_complete',
-      tick: newTick,
-      districts: broadcastDistricts.map(d => ({
-        id: d.id,
-        name: d.name,
-        type: d.type,
-        ownerId: d.owner_id,
-        ownerName: d.owner_name,
-        fortificationLevel: d.fortification_level,
-        adjacentIds: (() => { try { return JSON.parse(d.adjacent_ids); } catch { return []; } })(),
-      })),
-      corporations: broadcastCorps,
-      alliances: broadcastAlliances.map(a => ({
-        corpAId: a.corp_a_id,
-        corpBId: a.corp_b_id,
-        corpAName: a.corp_a_name,
-        corpBName: a.corp_b_name,
-      })),
-      activeLaw: broadcastLaw || null,
-      headlines: broadcastHeadlines,
-    });
+    try {
+      broadcast({
+        type: 'tick_complete',
+        tick: newTick,
+        districts: broadcastDistricts.map(d => ({
+          id: d.id,
+          name: d.name,
+          type: d.type,
+          ownerId: d.owner_id,
+          ownerName: d.owner_name,
+          fortificationLevel: d.fortification_level,
+          adjacentIds: (() => { try { return JSON.parse(d.adjacent_ids); } catch { return []; } })(),
+        })),
+        corporations: broadcastCorps,
+        alliances: broadcastAlliances.map(a => ({
+          corpAId: a.corp_a_id,
+          corpBId: a.corp_b_id,
+          corpAName: a.corp_a_name,
+          corpBName: a.corp_b_name,
+        })),
+        activeLaw: broadcastLaw || null,
+        headlines: broadcastHeadlines,
+      });
+    } catch (err) {
+      console.warn('[tick] broadcast error (non-fatal):', err.message);
+    }
 
     console.log(`[tick ${newTick}] ${corps.length} corps updated`);
   } finally {

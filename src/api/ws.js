@@ -13,7 +13,13 @@ function createWsServer(httpServer) {
 
 function broadcast(message) {
   if (!_wss) return;
-  const text = JSON.stringify(message);
+  let text;
+  try {
+    text = JSON.stringify(message);
+  } catch (err) {
+    console.warn('[ws] broadcast serialize error:', err.message);
+    return;
+  }
   for (const client of _wss.clients) {
     if (client.readyState === WebSocket.OPEN) {
       try {
