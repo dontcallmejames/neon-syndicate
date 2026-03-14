@@ -25,6 +25,7 @@ test('pariah collects 5 credits from non-pariah', () => {
   applyFeared(db, seasonId, 1);
   expect(db.prepare('SELECT credits FROM corporations WHERE id = ?').get('p1').credits).toBe(5);
   expect(db.prepare('SELECT credits FROM corporations WHERE id = ?').get('n1').credits).toBe(15);
+  expect(db.prepare("SELECT COUNT(*) AS cnt FROM events WHERE type = 'feared'").get().cnt).toBe(1);
 });
 
 test('payer with only 3 credits pays 3, not 5', () => {
