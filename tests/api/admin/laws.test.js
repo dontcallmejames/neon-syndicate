@@ -52,6 +52,9 @@ test('POST /admin/laws returns 409 for duplicate law name in same season', async
   await request(app).post('/admin/laws').set(AUTH).send({ name: 'Dupe Act', effect: 'x' });
   const res = await request(app).post('/admin/laws').set(AUTH).send({ name: 'Dupe Act', effect: 'y' });
   expect(res.status).toBe(409);
+  // Original law must still be active after the failed duplicate insert
+  const original = db.prepare("SELECT is_active FROM laws WHERE name = 'Dupe Act' AND season_id = ?").get(seasonId);
+  expect(original.is_active).toBe(1);
 });
 
 test('POST /admin/laws returns 404 when no active/paused season', async () => {
