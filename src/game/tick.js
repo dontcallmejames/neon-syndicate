@@ -33,7 +33,7 @@ function buildBriefingPayload(db, corp, season) {
 
   const headlines = db.prepare(
     "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' AND tick = ?"
-  ).all(corp.season_id, season.tick_count).map(e => e.narrative);
+  ).all(corp.season_id, season.tick_count).flatMap(e => e.narrative.split('\n'));
 
   const pendingAlliances = db.prepare(`
     SELECT a.corp_a_id AS proposing_corp_id, c.name AS proposing_corp_name
@@ -89,79 +89,81 @@ async function runTick(db, seasonId) {
   conn.prepare('UPDATE seasons SET tick_count = ?, is_ticking = 1 WHERE id = ?').run(newTick, seasonId);
   const updatedSeason = { ...season, tick_count: newTick };
 
-  // Step 2: Resource generation (includes Workforce enforcement)
-  generateResources(conn, seasonId, newTick);
+  try {
+    // Step 2: Resource generation (includes Workforce enforcement)
+    generateResources(conn, seasonId, newTick);
 
-  // Step 3: Parse NL submissions for tick that just ended (newTick - 1)
-  const pendingNLActions = conn.prepare(`
-    SELECT pa.*, c.reputation, c.credits, c.energy, c.workforce, c.intelligence, c.influence, c.political_power, c.name AS corp_name
-    FROM pending_actions pa
-    JOIN corporations c ON c.id = pa.corp_id
-    WHERE pa.tick = ? AND pa.raw_response IS NOT NULL
-      AND pa.parsed_actions IS NULL AND pa.status = 'pending'
-  `).all(newTick - 1);
+    // Step 3: Parse NL submissions for tick that just ended (newTick - 1)
+    const pendingNLActions = conn.prepare(`
+      SELECT pa.*, c.reputation, c.credits, c.energy, c.workforce, c.intelligence, c.influence, c.political_power, c.name AS corp_name
+      FROM pending_actions pa
+      JOIN corporations c ON c.id = pa.corp_id
+      WHERE pa.tick = ? AND pa.raw_response IS NOT NULL
+        AND pa.parsed_actions IS NULL AND pa.status = 'pending'
+    `).all(newTick - 1);
 
-  for (const row of pendingNLActions) {
-    const corp = {
-      id: row.corp_id,
-      name: row.corp_name,
-      reputation: row.reputation,
-      credits: row.credits,
-      energy: row.energy,
-      workforce: row.workforce,
-      intelligence: row.intelligence,
-      influence: row.influence,
-      political_power: row.political_power,
-    };
-    const availableActions = buildAvailableActions(corp.reputation < 15);
-    const result = await parseNLAction(row.raw_response, availableActions, corp);
-    if (result !== null) {
-      conn.prepare('UPDATE pending_actions SET parsed_actions = ? WHERE id = ?')
-        .run(JSON.stringify(result), row.id);
-    } else {
-      conn.prepare("UPDATE pending_actions SET status = 'rejected' WHERE id = ?")
-        .run(row.id);
+    for (const row of pendingNLActions) {
+      const corp = {
+        id: row.corp_id,
+        name: row.corp_name,
+        reputation: row.reputation,
+        credits: row.credits,
+        energy: row.energy,
+        workforce: row.workforce,
+        intelligence: row.intelligence,
+        influence: row.influence,
+        political_power: row.political_power,
+      };
+      const availableActions = buildAvailableActions(corp.reputation < 15);
+      const result = await parseNLAction(row.raw_response, availableActions, corp);
+      if (result !== null) {
+        conn.prepare('UPDATE pending_actions SET parsed_actions = ? WHERE id = ?')
+          .run(JSON.stringify(result), row.id);
+      } else {
+        conn.prepare("UPDATE pending_actions SET status = 'rejected' WHERE id = ?")
+          .run(row.id);
+      }
     }
-  }
 
-  // Step 4: Action resolution — resolve actions submitted during the tick that just ended
-  resolveActions(conn, seasonId, newTick - 1);
+    // Step 4: Action resolution — resolve actions submitted during the tick that just ended
+    resolveActions(conn, seasonId, newTick - 1);
 
-  // Step 5: Build briefing payloads for all corps
-  const corps = conn.prepare('SELECT * FROM corporations WHERE season_id = ?').all(seasonId);
-  const corpPayloadPairs = corps.map(corp => ({
-    corp,
-    payload: buildBriefingPayload(conn, corp, updatedSeason),
-  }));
+    // Step 5: Build briefing payloads for all corps
+    const corps = conn.prepare('SELECT * FROM corporations WHERE season_id = ?').all(seasonId);
+    const corpPayloadPairs = corps.map(corp => ({
+      corp,
+      payload: buildBriefingPayload(conn, corp, updatedSeason),
+    }));
 
-  // Step 6: Generate narratives via Gemini
-  const narratives = await generateNarratives(corpPayloadPairs);
-  for (const { corp, payload } of corpPayloadPairs) {
-    payload.narrative = narratives[corp.id] ?? buildFallbackNarrative(corp, payload);
-  }
-
-  // Step 7: INSERT OR REPLACE briefings into DB
-  conn.transaction(() => {
+    // Step 6: Generate narratives via Gemini
+    const narratives = await generateNarratives(corpPayloadPairs);
     for (const { corp, payload } of corpPayloadPairs) {
-      // INSERT OR REPLACE on UNIQUE(corp_id, tick): deletes old row then inserts new.
-      conn.prepare(`
-        INSERT OR REPLACE INTO briefings (id, corp_id, tick, payload)
-        VALUES (?, ?, ?, ?)
-      `).run(crypto.randomUUID(), corp.id, newTick, JSON.stringify(payload));
+      payload.narrative = narratives[corp.id] ?? buildFallbackNarrative(corp, payload);
     }
-  })();
 
-  // Step 8: Generate and write headlines
-  const events = conn.prepare(
-    'SELECT * FROM events WHERE season_id = ? AND tick = ?'
-  ).all(seasonId, newTick - 1);
-  const headlines = await generateHeadlines(events, newTick);
-  writeEvent(conn, { seasonId, tick: newTick, type: 'headline', narrative: headlines.join('\n') });
+    // Step 7: INSERT OR REPLACE briefings into DB
+    conn.transaction(() => {
+      for (const { corp, payload } of corpPayloadPairs) {
+        // INSERT OR REPLACE on UNIQUE(corp_id, tick): deletes old row then inserts new.
+        conn.prepare(`
+          INSERT OR REPLACE INTO briefings (id, corp_id, tick, payload)
+          VALUES (?, ?, ?, ?)
+        `).run(crypto.randomUUID(), corp.id, newTick, JSON.stringify(payload));
+      }
+    })();
 
-  // Step 9: Clear is_ticking flag — briefings are now ready
-  conn.prepare('UPDATE seasons SET is_ticking = 0 WHERE id = ?').run(seasonId);
+    // Step 8: Generate and write headlines
+    const events = conn.prepare(
+      'SELECT * FROM events WHERE season_id = ? AND tick = ?'
+    ).all(seasonId, newTick - 1);
+    const headlines = await generateHeadlines(events, newTick);
+    writeEvent(conn, { seasonId, tick: newTick, type: 'headline', narrative: headlines.join('\n') });
 
-  console.log(`[tick ${newTick}] ${corps.length} corps updated`);
+    console.log(`[tick ${newTick}] ${corps.length} corps updated`);
+  } finally {
+    // Step 9: Clear is_ticking flag — briefings are now ready (always runs, even on error)
+    conn.prepare('UPDATE seasons SET is_ticking = 0 WHERE id = ?').run(seasonId);
+  }
 }
 
 let _interval = null;
