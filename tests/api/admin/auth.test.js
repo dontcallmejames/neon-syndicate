@@ -8,7 +8,6 @@ beforeEach(() => { delete process.env.ADMIN_KEY; });
 afterEach(() => { delete process.env.ADMIN_KEY; });
 
 test('returns 503 when ADMIN_KEY env var is not set', () => {
-  delete process.env.ADMIN_KEY;
   const req = { headers: {} };
   const res = makeRes();
   const next = jest.fn();
@@ -31,6 +30,17 @@ test('returns 401 when Authorization header is missing', () => {
 test('returns 401 when Authorization header has wrong key', () => {
   process.env.ADMIN_KEY = 'secret';
   const req = { headers: { authorization: 'Bearer wrongkey' } };
+  const res = makeRes();
+  const next = jest.fn();
+  adminAuth(req, res, next);
+  expect(res.status).toHaveBeenCalledWith(401);
+  expect(next).not.toHaveBeenCalled();
+});
+
+test('returns 401 when header has correct length but wrong key', () => {
+  process.env.ADMIN_KEY = 'secret';
+  // 'Bearer aaaaaa' has the same byte length as 'Bearer secret'
+  const req = { headers: { authorization: 'Bearer aaaaaa' } };
   const res = makeRes();
   const next = jest.fn();
   adminAuth(req, res, next);
