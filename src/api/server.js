@@ -1,22 +1,34 @@
 // src/api/server.js
+const http = require('http');
+const path = require('path');
 const express = require('express');
 const { getDb } = require('../db/index');
 const { requireAuth } = require('./auth');
 const registerRoute = require('./routes/register');
 const briefingRoute = require('./routes/briefing');
 const actionRoute = require('./routes/action');
+const worldRoute = require('./routes/world');
+const { createWsServer } = require('./ws');
 
 function createServer(db) {
   const conn = db || getDb();
   const app = express();
   app.use(express.json());
 
+  // API routes first — prevents public/ files from shadowing API paths
   app.post('/register', registerRoute(conn));
   app.get('/briefing/:agentId', requireAuth(conn), briefingRoute(conn));
   app.post('/action/:agentId', requireAuth(conn), actionRoute(conn));
+  app.get('/world', worldRoute(conn));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-  return app;
+  // Static file serving after routes
+  app.use(express.static(path.join(__dirname, '../../public')));
+
+  const httpServer = http.createServer(app);
+  createWsServer(httpServer);
+
+  return { app, httpServer };
 }
 
 module.exports = { createServer };

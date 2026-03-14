@@ -13,7 +13,7 @@ beforeEach(() => {
   // Season starts as 'pending' by default — registration is open
   seasonId = createSeason(db);
   createDistrictMap(db, seasonId);
-  app = createServer(db);
+  ({ app } = createServer(db));
 });
 afterEach(() => db.close());
 

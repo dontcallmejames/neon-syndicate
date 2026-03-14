@@ -19,7 +19,7 @@ beforeEach(() => {
   seasonId = createSeason(db);
   createDistrictMap(db, seasonId);
   db.prepare("UPDATE seasons SET status = 'active' WHERE id = ?").run(seasonId);
-  app = createServer(db);
+  ({ app } = createServer(db));
 
   corpId = uuidv4();
   apiKey = uuidv4();
