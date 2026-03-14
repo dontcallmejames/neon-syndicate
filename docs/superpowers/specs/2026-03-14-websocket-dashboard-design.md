@@ -32,11 +32,14 @@ Add a live spectator dashboard to Neon Syndicate. After each tick, the server br
 | `src/api/ws.js` | **Create** — WebSocket server module |
 | `src/api/routes/world.js` | **Create** — `GET /world` endpoint |
 | `public/index.html` | **Create** — single-page spectator dashboard |
-| `src/api/server.js` | **Modify** — attach ws server, serve `public/`, add `/world` route, return `httpServer` |
+| `src/api/server.js` | **Modify** — attach ws server, serve `public/`, add `/world` route, return `{ app, httpServer }` |
 | `src/index.js` | **Modify** — use `httpServer.listen()` instead of `app.listen()` |
 | `src/game/tick.js` | **Modify** — add step 13: broadcast `tick_complete` after headlines |
 | `tests/api/ws.test.js` | **Create** — WebSocket broadcast unit tests |
 | `tests/api/world.test.js` | **Create** — GET /world endpoint tests |
+| `tests/api/register.test.js` | **Modify** — destructure `{ app }` from `createServer()` |
+| `tests/api/briefing.test.js` | **Modify** — destructure `{ app }` from `createServer()` |
+| `tests/api/action.test.js` | **Modify** — destructure `{ app }` from `createServer()` |
 
 ---
 
@@ -62,7 +65,11 @@ function broadcast(message) {
   const text = JSON.stringify(message);
   for (const client of _wss.clients) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(text);
+      try {
+        client.send(text);
+      } catch (err) {
+        console.warn('[ws] broadcast send error:', err.message);
+      }
     }
   }
 }
@@ -72,7 +79,7 @@ module.exports = { createWsServer, broadcast };
 
 - `createWsServer(httpServer)` — called once at startup from `server.js`
 - `broadcast(message)` — fire-and-forget; no-op if no clients connected or `_wss` not yet created
-- Individual client errors are swallowed so a bad client cannot crash the server
+- Each `client.send()` is wrapped in try/catch so a failing client cannot interrupt delivery to other clients or propagate an error into the tick loop
 
 ---
 
@@ -82,11 +89,13 @@ module.exports = { createWsServer, broadcast };
 
 1. Create an explicit `http.Server`: `const httpServer = require('http').createServer(app)`
 2. Call `createWsServer(httpServer)` to attach the WebSocket server
-3. Add `app.use(express.static(path.join(__dirname, '../../public')))` to serve the dashboard
+3. Register all API routes first, then add `app.use(express.static(path.join(__dirname, '../../public')))` after all routes, so no static filename can shadow an API path
 4. Register `GET /world` route (no auth required)
 5. Return `{ app, httpServer }` instead of just `app`
 
 `broadcast` is not returned from `createServer` — callers import it directly from `src/api/ws.js`.
+
+**Existing API test files** (`tests/api/register.test.js`, `tests/api/briefing.test.js`, `tests/api/action.test.js`) all call `createServer()` and use the result as an Express app. Each must be updated to destructure: `const { app } = createServer(db)`.
 
 ---
 
@@ -101,7 +110,17 @@ httpServer.listen(port, () => console.log(`Neon Syndicate running on port ${port
 
 ## 5. `GET /world` Endpoint (`src/api/routes/world.js`)
 
-No authentication required. Returns current world state — same shape as the `tick_complete` WebSocket payload — queried live from the DB. Used by the dashboard on initial load so there is something to display before the first tick fires.
+No authentication required. Follows the same factory pattern as other routes: `module.exports = function(conn) { return (req, res) => { ... }; }`.
+
+Returns current world state — same shape as the `tick_complete` WebSocket payload — queried live from the DB. Used by the dashboard on initial load so there is something to display before the first tick fires.
+
+**When no season is active** (status not `'active'`): return HTTP 200 with empty arrays and `tick: 0`:
+
+```json
+{ "type": "world_state", "tick": 0, "districts": [], "corporations": [], "alliances": [], "activeLaw": null, "headlines": [] }
+```
+
+**When a season is active:**
 
 ```js
 GET /world
@@ -116,7 +135,10 @@ Response: {
 }
 ```
 
-`ownerName` is joined from the `corporations` table (null for unclaimed districts). `valuation` is computed via `calculateValuation`. `headlines` are the most recent `headline`-type events (up to 5, from the latest tick that has them).
+- `ownerName` is joined from the `corporations` table; null for unclaimed districts
+- `valuation` is computed via `calculateValuation(corp, districtCount)` — requires all resource columns to be selected
+- `corporations` are ordered `ORDER BY rowid ASC` (registration order) — this ordering is stable and must match the order used in `tick_complete` broadcasts so the client can maintain a consistent color assignment
+- `headlines` are from the single most recent `headline`-type event row, split on `\n` — empty array if no such event exists
 
 ---
 
@@ -138,9 +160,10 @@ const districts = conn.prepare(`
   WHERE d.season_id = ?
 `).all(seasonId);
 
-const broadcastCorps = conn.prepare(
-  'SELECT id, name, reputation FROM corporations WHERE season_id = ?'
-).all(seasonId).map(c => ({
+const broadcastCorps = conn.prepare(`
+  SELECT id, name, reputation, credits, energy, workforce, intelligence, influence, political_power
+  FROM corporations WHERE season_id = ? ORDER BY rowid ASC
+`).all(seasonId).map(c => ({
   id: c.id,
   name: c.name,
   valuation: calculateValuation(c, districts.filter(d => d.owner_id === c.id).length),
@@ -160,8 +183,8 @@ const alliances = conn.prepare(`
 const activeLaw = conn.prepare('SELECT name, effect FROM laws WHERE season_id = ? AND is_active = 1').get(seasonId);
 
 const latestHeadlineEvent = conn.prepare(
-  "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' ORDER BY tick DESC LIMIT 1"
-).get(seasonId);
+  "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' AND tick = ?"
+).get(seasonId, newTick);
 const headlines = latestHeadlineEvent ? latestHeadlineEvent.narrative.split('\n') : [];
 
 broadcast({
@@ -182,7 +205,7 @@ broadcast({
 });
 ```
 
-The `broadcast` call is fire-and-forget. If it throws (e.g., a client send error), the error is logged and the tick continues — `is_ticking` is always cleared in `finally`.
+The `broadcast` call is fire-and-forget. Each `client.send()` is wrapped in try/catch inside `ws.js` — errors are logged but do not propagate into `runTick`. `is_ticking` is always cleared in `finally` regardless.
 
 ---
 
@@ -210,7 +233,7 @@ Single self-contained HTML file. Scripts loaded via CDN:
 
 ### Components
 
-**Header bar:** Corp name + tick number + season + live indicator (green dot pulses).
+**Header bar:** Game title + tick number + season + live indicator (green dot pulses).
 
 **City map (SVG):**
 - Force-directed layout via `d3-force` — nodes are district circles, edges are adjacency links
@@ -220,13 +243,13 @@ Single self-contained HTML file. Scripts loaded via CDN:
 - Pan/zoom: `d3.zoom()` applied to an SVG `<g>` wrapper containing all nodes and edges
 - "SCROLL TO ZOOM · DRAG TO PAN" hint text rendered in the center background
 
-**Corp color palette** (assigned by index of first appearance in registration order):
+**Corp color palette** (assigned by index based on `ORDER BY rowid ASC` registration order):
 ```
 0: #7c3aed (purple)   1: #2563eb (blue)    2: #db2777 (pink)
 3: #16a34a (green)    4: #ea580c (orange)  5: #0891b2 (cyan)
 6: #ca8a04 (yellow)   7: #dc2626 (red)
 ```
-Colors are assigned client-side based on the order corps appear in the `corporations` array from `GET /world`. The same order is maintained across WebSocket updates.
+The client assigns colors on the first `GET /world` response by iterating the `corporations` array in order. The server always returns corps `ORDER BY rowid ASC`, so the mapping is stable across page reloads and WebSocket reconnects. If a corporation appears in a `tick_complete` message that was not present in the initial `GET /world` response, the client assigns it the next available palette index.
 
 **Floating leaderboard (top-right overlay):**
 - Semi-transparent dark background with blur backdrop
@@ -247,9 +270,14 @@ Colors are assigned client-side based on the order corps appear in the `corporat
 ### WebSocket client behavior
 
 ```js
+let retryMs = 500;
+
 function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { /* clear reconnecting indicator */ };
+  ws.onopen = () => {
+    retryMs = 500; // reset backoff on successful connect
+    hideReconnecting();
+  };
   ws.onmessage = (e) => render(JSON.parse(e.data));
   ws.onclose = () => {
     showReconnecting();
@@ -262,7 +290,7 @@ On page load:
 1. `fetch('/world')` → render initial state
 2. `connect()` → establish WebSocket, re-render on each `tick_complete`
 
-`retryMs` starts at 500ms, doubles on each failed attempt, caps at 5000ms.
+`retryMs` resets to 500ms on each successful `onopen` so repeated disconnects always start at the short end of the backoff.
 
 ---
 
@@ -274,20 +302,22 @@ On page load:
 - `broadcast()` with no connected clients → no-op
 - `broadcast(message)` with one connected mock client → client receives `JSON.stringify(message)`
 - `broadcast(message)` with multiple clients → all receive the message
-- Client error during send → other clients still receive message (error swallowed)
+- Client error during send → other clients still receive message (error swallowed, warn logged)
 
 Uses a real `http.Server` and `ws.WebSocket` client in-process (no mocking needed).
 
 ### `tests/api/world.test.js`
 
-- `GET /world` returns 200 with correct shape (districts, corporations, alliances, activeLaw, headlines)
+- `GET /world` with no active season → 200 with `{ tick: 0, districts: [], corporations: [], alliances: [], activeLaw: null, headlines: [] }`
+- `GET /world` with active season at `tick_count = 0` (no ticks run yet) → 200 with districts (all unclaimed), corporations (starting resources), no alliances, no law, no headlines
+- `GET /world` returns correct shape after one tick (districts, corporations, alliances, activeLaw, headlines)
 - `ownerName` is null for unclaimed districts
 - `activeLaw` is null when no law is active
 - `headlines` is empty array when no headline events exist
 
 ### `tests/game/tick.test.js` addition
 
-- After `runTick`, verify `broadcast` was called with `type: 'tick_complete'` and correct `tick` value (mock `broadcast` via `jest.mock`)
+- After `runTick`, verify `broadcast` was called with `type: 'tick_complete'` and correct `tick` value (mock `broadcast` via `jest.mock('../../src/api/ws')`)
 
 ---
 
