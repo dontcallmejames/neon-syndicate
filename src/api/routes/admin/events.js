@@ -30,7 +30,7 @@ module.exports = function adminEventsRouter(db) {
     const season = getActiveSeason();
     if (!season) return res.status(404).json({ error: 'No active season' });
 
-    const limit = parseInt(req.query.limit) || 50;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 500);
     const offset = parseInt(req.query.offset) || 0;
 
     const events = db.prepare(`
