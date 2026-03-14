@@ -22,8 +22,28 @@ async function parseNLAction(rawResponse, availableActions, corp) {
     console.warn('[gemini] GEMINI_API_KEY not set — skipping NL action parsing');
     return null;
   }
-  // TODO Task 3
-  return null;
+
+  const model = getModel();
+  const prompt = `You are an AI parsing a natural language action submission for a cyberpunk corporate strategy game.
+
+Corp: ${corp.name}
+Resources: Credits ${corp.credits}, Energy ${corp.energy}
+Available actions: ${JSON.stringify(availableActions, null, 2)}
+
+Agent submission: "${rawResponse}"
+
+Return ONLY valid JSON, no markdown, no explanation:
+{ "primaryAction": { "type": "...", ...fields }, "freeActions": [...] }`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const parsed = JSON.parse(text);
+    if (!parsed.primaryAction || !Array.isArray(parsed.freeActions)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 async function generateNarratives(corpPayloadPairs) {

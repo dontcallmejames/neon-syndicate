@@ -56,6 +56,58 @@ describe('buildFallbackNarrative', () => {
   });
 });
 
+describe('parseNLAction', () => {
+  let mockGenerateContent;
+
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGenerateContent = jest.fn();
+    GoogleGenerativeAI.mockImplementation(() => ({
+      getGenerativeModel: () => ({ generateContent: mockGenerateContent }),
+    }));
+  });
+
+  afterEach(() => {
+    delete process.env.GEMINI_API_KEY;
+    jest.clearAllMocks();
+  });
+
+  test('returns parsed action structure on valid JSON response', async () => {
+    const parsed = { primaryAction: { type: 'claim', targetDistrictId: 'dist1' }, freeActions: [] };
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify(parsed) },
+    });
+
+    const result = await parseNLAction('claim district 1', [], { id: 'corp1', name: 'TestCorp', credits: 10, energy: 10 });
+    expect(result).toEqual(parsed);
+  });
+
+  test('returns null when Gemini returns non-JSON', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => 'sorry I cannot help with that' },
+    });
+
+    const result = await parseNLAction('do something', [], { id: 'corp1', name: 'TestCorp', credits: 10, energy: 10 });
+    expect(result).toBeNull();
+  });
+
+  test('returns null when Gemini throws', async () => {
+    mockGenerateContent.mockRejectedValue(new Error('API error'));
+
+    const result = await parseNLAction('do something', [], { id: 'corp1', name: 'TestCorp', credits: 10, energy: 10 });
+    expect(result).toBeNull();
+  });
+
+  test('returns null when parsed JSON lacks required keys', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify({ someOtherKey: true }) },
+    });
+
+    const result = await parseNLAction('do something', [], { id: 'corp1', name: 'TestCorp', credits: 10, energy: 10 });
+    expect(result).toBeNull();
+  });
+});
+
 describe('parseNLAction — no API key', () => {
   let originalKey;
   beforeEach(() => {
