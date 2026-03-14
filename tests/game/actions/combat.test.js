@@ -95,3 +95,49 @@ test('attack: reputation -3 regardless of outcome', () => {
   const corp = db.prepare('SELECT reputation FROM corporations WHERE id = ?').get('attacker');
   expect(corp.reputation).toBe(47); // -3
 });
+
+test('open_borders law halves claim cost to 1 energy and 2 credits', () => {
+  makeCorp('c1', 'Corp1', { energy: 5, credits: 5 });
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'open_borders'").run(seasonId);
+  const target = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  resolveCombat(db, seasonId, 1, [
+    { corpId: 'c1', action: { type: 'claim', targetDistrictId: target.id } }
+  ]);
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get('c1');
+  expect(corp.energy).toBe(4); // 5 - floor(3*0.5)=1
+  expect(corp.credits).toBe(3); // 5 - floor(5*0.5)=2
+  const d = db.prepare('SELECT owner_id FROM districts WHERE id = ?').get(target.id);
+  expect(d.owner_id).toBe('c1'); // district was claimed
+});
+
+test('two attackers tied: one of them wins (random tie-breaking)', () => {
+  makeCorp('a1', 'Attacker1', { energy: 50, workforce: 0 });
+  makeCorp('a2', 'Attacker2', { energy: 50, workforce: 0 });
+  makeCorp('defender', 'Defender', { workforce: 0 });
+  const target = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  db.prepare('UPDATE districts SET owner_id = ?, fortification_level = 0 WHERE id = ?').run('defender', target.id);
+
+  // Both attackers spend 5 energy → strength = 5*1.5 + 0 = 7.5 each; defense = 0 → both beat it
+  resolveCombat(db, seasonId, 1, [
+    { corpId: 'a1', action: { type: 'attack', targetDistrictId: target.id, energySpent: 5 } },
+    { corpId: 'a2', action: { type: 'attack', targetDistrictId: target.id, energySpent: 5 } },
+  ]);
+
+  const d = db.prepare('SELECT owner_id FROM districts WHERE id = ?').get(target.id);
+  expect(['a1', 'a2']).toContain(d.owner_id); // one of the two attackers wins
+});
+
+test('attack on unowned district is skipped', () => {
+  makeCorp('attacker', 'Attacker', { energy: 50, credits: 50 });
+  const target = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+
+  resolveCombat(db, seasonId, 1, [
+    { corpId: 'attacker', action: { type: 'attack', targetDistrictId: target.id, energySpent: 10 } }
+  ]);
+
+  // District still unowned, attacker resources unchanged (attack skipped)
+  const d = db.prepare('SELECT owner_id FROM districts WHERE id = ?').get(target.id);
+  expect(d.owner_id).toBeNull();
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get('attacker');
+  expect(corp.energy).toBe(50); // no deduction
+});

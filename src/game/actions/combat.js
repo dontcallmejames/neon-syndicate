@@ -27,7 +27,7 @@ function computeDefenseStrength(db, district, defender) {
 }
 
 function getClaimCosts(db, seasonId) {
-  const law = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1").get(seasonId);
+  const law = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1 ORDER BY rowid LIMIT 1").get(seasonId);
   if (law && law.effect === 'open_borders') {
     return { energy: Math.floor(3 * 0.5), credits: Math.floor(5 * 0.5) };
   }
