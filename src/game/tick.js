@@ -273,4 +273,8 @@ function stopTickLoop() {
   if (_interval) { clearInterval(_interval); _interval = null; }
 }
 
-module.exports = { runTick, startTickLoop, stopTickLoop };
+async function runTickNow(db, seasonId) {
+  return runTick(db, seasonId);
+}
+
+module.exports = { runTick, startTickLoop, stopTickLoop, runTickNow };

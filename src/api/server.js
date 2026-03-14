@@ -11,6 +11,7 @@ const worldRoute = require('./routes/world');
 const { createWsServer } = require('./ws');
 const adminAuth = require('./middleware/adminAuth');
 const adminState = require('./routes/admin/state');
+const adminSeasons = require('./routes/admin/seasons');
 
 function createServer(db) {
   const conn = db || getDb();
@@ -27,6 +28,7 @@ function createServer(db) {
   // Admin routes — protected by Bearer token, before static so /admin/* can't be shadowed
   app.use('/admin', adminAuth);
   app.get('/admin/state', adminState(conn));
+  app.use('/admin/seasons', adminSeasons(conn));
 
   // Static file serving after routes
   // public/ created in Task 7 — no-op until then
