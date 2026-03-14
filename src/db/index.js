@@ -10,4 +10,8 @@ function getDb() {
   return _db;
 }
 
-module.exports = { getDb };
+function closeDb() {
+  if (_db) { _db.close(); _db = null; }
+}
+
+module.exports = { getDb, closeDb };

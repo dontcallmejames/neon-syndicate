@@ -121,6 +121,7 @@ function initDb(db) {
       UNIQUE(corp_id, tick)
     );
   `);
+  conn.pragma('foreign_keys = ON');
 }
 
 module.exports = { initDb };
