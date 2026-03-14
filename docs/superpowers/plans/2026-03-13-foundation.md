@@ -6,7 +6,7 @@
 
 **Architecture:** Express.js REST server backed by better-sqlite3 (synchronous SQLite). A setInterval-based tick loop fires every N minutes, generates resources, and updates briefings. Action submissions are stored in the DB; resolution logic comes in Plan 2. Gemini integration (narrative briefings) comes in Plan 4 — for now, briefings return structured JSON only with `narrative: null`.
 
-**Tech Stack:** Node.js 18+, Express 4, better-sqlite3 v9+ (bundles SQLite 3.45+), Jest, supertest, nodemon (dev)
+**Tech Stack:** Node.js 18+, Express 5, better-sqlite3 v11+ (bundles SQLite 3.46+, pre-built binaries for Node 24), Jest, supertest, nodemon (dev)
 
 **Spec:** `docs/superpowers/specs/2026-03-13-agent-game-design.md`
 
@@ -76,7 +76,7 @@ Expected: `package.json` created.
 - [ ] **Step 2: Install all dependencies (including dev)**
 
 ```bash
-npm install express better-sqlite3@^9.0.0 uuid dotenv
+npm install express better-sqlite3@^11.0.0 uuid dotenv
 npm install --save-dev jest nodemon supertest
 ```
 
