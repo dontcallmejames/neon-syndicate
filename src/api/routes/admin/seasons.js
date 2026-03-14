@@ -69,7 +69,12 @@ module.exports = function adminSeasonsRouter(db) {
     if (!season) return res.status(404).json({ error: 'Season not found' });
     if (season.status !== 'active') return res.status(409).json({ error: 'Season is not active' });
     if (season.is_ticking) return res.status(409).json({ error: 'Tick already in progress' });
-    await runTickNow(db, season.id);
+    try {
+      await runTickNow(db, season.id);
+    } catch (err) {
+      console.error('[admin tick] runTick failed:', err);
+      return res.status(500).json({ error: 'Tick failed' });
+    }
     res.json({ ok: true });
   });
 
