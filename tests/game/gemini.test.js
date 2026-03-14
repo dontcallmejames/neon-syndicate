@@ -174,6 +174,21 @@ describe('generateNarratives', () => {
   });
 });
 
+describe('generateNarratives — no API key', () => {
+  test('returns empty object when GEMINI_API_KEY is not set', async () => {
+    const savedKey = process.env.GEMINI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    try {
+      const result = await generateNarratives([
+        { corp: { id: 'corp1', name: 'Alpha Inc', reputation: 50 }, payload: { tick: 1, holdings: [], resources: { credits: 10, energy: 5, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+      ]);
+      expect(result).toEqual({});
+    } finally {
+      process.env.GEMINI_API_KEY = savedKey;
+    }
+  });
+});
+
 describe('parseNLAction — no API key', () => {
   let originalKey;
   beforeEach(() => {

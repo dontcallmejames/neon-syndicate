@@ -54,20 +54,26 @@ async function generateNarratives(corpPayloadPairs) {
   }
 
   const model = getModel();
-  const corpSummaries = corpPayloadPairs.map(({ corp, payload }) => ({
-    id: corp.id,
-    name: corp.name,
-    tick: payload.tick,
-    holdings: payload.holdings.length,
-    resources: payload.resources,
-    reputationLabel: corp.reputationLabel,
-    eventCount: payload.events.length,
-    events: payload.events.slice(0, 5),
-  }));
+  const corpSummaries = corpPayloadPairs.map(({ corp, payload }) => {
+    const reputationLabel =
+      corp.reputation >= 75 ? 'Trusted' :
+      corp.reputation >= 40 ? 'Neutral' :
+      corp.reputation >= 15 ? 'Notorious' : 'Pariah';
+    return {
+      id: corp.id,
+      name: corp.name,
+      tick: payload.tick,
+      holdings: payload.holdings.length,
+      resources: payload.resources,
+      reputationLabel,
+      eventCount: payload.events.length,
+      events: payload.events.slice(0, 5),
+    };
+  });
 
   const prompt = `You are writing cyberpunk tabloid briefings for a corporate strategy game. Write from each corp's perspective — dramatic, terse, present tense.
 
-For each corporation below, write 2-3 sentences of cyberpunk prose referencing their specific situation: district control, resources, recent events.
+For each corporation below, write 2-3 sentences of cyberpunk prose referencing their specific situation: district control, resources, and notable events such as district changes, messages received, and laws enacted. Maintain a cyberpunk tabloid tone — dramatic, terse, present tense.
 
 Return ONLY valid JSON, no markdown, no explanation:
 { "<corpId>": "narrative string", ... }
