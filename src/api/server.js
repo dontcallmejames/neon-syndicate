@@ -14,6 +14,7 @@ const adminState = require('./routes/admin/state');
 const adminSeasons = require('./routes/admin/seasons');
 const adminCorps = require('./routes/admin/corps');
 const adminDistricts = require('./routes/admin/districts');
+const adminLaws = require('./routes/admin/laws');
 
 function createServer(db) {
   const conn = db || getDb();
@@ -33,6 +34,7 @@ function createServer(db) {
   app.use('/admin/seasons', adminSeasons(conn));
   app.use('/admin/corps', adminCorps(conn));
   app.use('/admin/districts', adminDistricts(conn));
+  app.use('/admin/laws', adminLaws(conn));
 
   // Static file serving after routes
   // public/ created in Task 7 — no-op until then
