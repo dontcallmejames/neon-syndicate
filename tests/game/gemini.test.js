@@ -189,6 +189,64 @@ describe('generateNarratives — no API key', () => {
   });
 });
 
+describe('generateHeadlines', () => {
+  let mockGenerateContent;
+
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGenerateContent = jest.fn();
+    GoogleGenerativeAI.mockImplementation(() => ({
+      getGenerativeModel: () => ({ generateContent: mockGenerateContent }),
+    }));
+  });
+
+  afterEach(() => {
+    delete process.env.GEMINI_API_KEY;
+    jest.clearAllMocks();
+  });
+
+  test('returns array of headline strings on valid response', async () => {
+    const headlines = ['CORP SEIZES DISTRICT', 'BLACKOUT IN SECTOR 7'];
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify(headlines) },
+    });
+
+    const result = await generateHeadlines([{ type: 'claim', narrative: 'Alpha took a district' }], 1);
+    expect(result).toEqual(headlines);
+  });
+
+  test('returns fallback when Gemini throws', async () => {
+    mockGenerateContent.mockRejectedValue(new Error('timeout'));
+
+    const result = await generateHeadlines([], 1);
+    expect(result).toEqual(['CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE']);
+  });
+
+  test('returns fallback when Gemini returns non-JSON', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => 'oops not json' },
+    });
+
+    const result = await generateHeadlines([], 1);
+    expect(result).toEqual(['CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE']);
+  });
+
+  test('returns fallback when Gemini returns empty array', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify([]) },
+    });
+
+    const result = await generateHeadlines([], 1);
+    expect(result).toEqual(['CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE']);
+  });
+
+  test('returns fallback when GEMINI_API_KEY is not set', async () => {
+    delete process.env.GEMINI_API_KEY;
+    const result = await generateHeadlines([], 1);
+    expect(result).toEqual(['CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE']);
+  });
+});
+
 describe('parseNLAction — no API key', () => {
   let originalKey;
   beforeEach(() => {

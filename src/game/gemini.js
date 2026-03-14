@@ -1,6 +1,8 @@
 // src/game/gemini.js
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+const FALLBACK_HEADLINE = 'CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE';
+
 // Model is instantiated per-call so GEMINI_API_KEY can be set/changed in tests
 // without module-level caching issues.
 function getModel() {
@@ -94,10 +96,40 @@ ${JSON.stringify(corpSummaries, null, 2)}`;
 async function generateHeadlines(events, tick) {
   if (!process.env.GEMINI_API_KEY) {
     console.warn('[gemini] GEMINI_API_KEY not set — skipping headline generation');
-    return [];
+    return [FALLBACK_HEADLINE];
   }
-  // TODO Task 5
-  return [];
+
+  const model = getModel();
+  const hasEvents = events && events.length > 0;
+  const eventSummaries = hasEvents
+    ? events.map(e => ({ type: e.type, narrative: e.narrative }))
+    : [];
+
+  const prompt = hasEvents
+    ? `You are writing cyberpunk tabloid headlines for a corporate strategy game. Tick ${tick} just resolved.
+
+Write 3-5 short, punchy tabloid headlines based on these events. Name districts and corporations involved. Do NOT reveal specific resource amounts or game mechanics. Dramatic, present tense, ALL CAPS style.
+
+Events:
+${JSON.stringify(eventSummaries, null, 2)}
+
+Return ONLY a JSON array of strings: ["HEADLINE ONE", "HEADLINE TWO", ...]`
+    : `You are writing cyberpunk tabloid headlines for a corporate strategy game. Tick ${tick} was quiet — no major corporate actions.
+
+Write 3-5 short generic city-news headlines. Dramatic, present tense, ALL CAPS style.
+
+Return ONLY a JSON array of strings: ["HEADLINE ONE", "HEADLINE TWO", ...]`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed) || parsed.length === 0) return [FALLBACK_HEADLINE];
+    return parsed;
+  } catch (err) {
+    console.warn('[gemini] generateHeadlines error:', err.message);
+    return [FALLBACK_HEADLINE];
+  }
 }
 
 module.exports = { parseNLAction, generateNarratives, generateHeadlines, buildFallbackNarrative };
