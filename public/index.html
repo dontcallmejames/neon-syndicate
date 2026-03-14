@@ -174,6 +174,16 @@ const TYPE_EMOJI = {
   government_quarter: '🏛️',
 };
 
+// ── HTML escape (prevents XSS from corp names in leaderboard) ────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 const corpColors  = {};   // corpId → hex color
 let   mapInitialized = false;
@@ -309,7 +319,7 @@ function renderLeaderboard(corporations) {
     <div class="lb-row">
       <span class="lb-rank${i === 0 ? ' gold' : ''}">${i + 1}</span>
       <span class="lb-dot" style="background:${corpColors[corp.id] || '#6b7280'}"></span>
-      <span class="lb-name">${corp.name}</span>
+      <span class="lb-name">${escHtml(corp.name)}</span>
       <span class="lb-val" style="color:${corpColors[corp.id] || '#6b7280'}">
         ${corp.valuation.toLocaleString()}
       </span>

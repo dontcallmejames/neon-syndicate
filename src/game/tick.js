@@ -162,7 +162,7 @@ async function runTick(db, seasonId) {
 
     // Step 13: Broadcast tick_complete to WebSocket dashboard clients
     const broadcastDistricts = conn.prepare(`
-      SELECT d.id, d.name, d.type, d.owner_id, c.name AS owner_name, d.fortification_level
+      SELECT d.id, d.name, d.type, d.owner_id, c.name AS owner_name, d.fortification_level, d.adjacent_ids
       FROM districts d LEFT JOIN corporations c ON c.id = d.owner_id
       WHERE d.season_id = ?
     `).all(seasonId);
@@ -212,6 +212,7 @@ async function runTick(db, seasonId) {
         ownerId: d.owner_id,
         ownerName: d.owner_name,
         fortificationLevel: d.fortification_level,
+        adjacentIds: (() => { try { return JSON.parse(d.adjacent_ids); } catch { return []; } })(),
       })),
       corporations: broadcastCorps,
       alliances: broadcastAlliances.map(a => ({
