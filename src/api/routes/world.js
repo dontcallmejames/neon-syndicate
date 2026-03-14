@@ -1,6 +1,10 @@
 // src/api/routes/world.js
 const { calculateValuation } = require('../../game/valuation');
 
+function parseJson(str, fallback = []) {
+  try { return JSON.parse(str); } catch { return fallback; }
+}
+
 module.exports = function worldRoute(conn) {
   return function (_req, res) {
     const season = conn.prepare("SELECT * FROM seasons WHERE status = 'active' LIMIT 1").get();
@@ -51,7 +55,7 @@ module.exports = function worldRoute(conn) {
       FROM alliances a
       JOIN corporations ca ON ca.id = a.corp_a_id
       JOIN corporations cb ON cb.id = a.corp_b_id
-      WHERE (ca.season_id = ? OR cb.season_id = ?)
+      WHERE ca.season_id = ? AND cb.season_id = ?
         AND a.formed_tick IS NOT NULL AND a.broken_tick IS NULL
     `).all(season.id, season.id);
 
@@ -62,7 +66,9 @@ module.exports = function worldRoute(conn) {
     const headlineEvent = conn.prepare(
       "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' ORDER BY tick DESC LIMIT 1"
     ).get(season.id);
-    const headlines = headlineEvent ? headlineEvent.narrative.split('\n') : [];
+    const headlines = headlineEvent
+      ? headlineEvent.narrative.split('\n').filter(h => h.trim() !== '')
+      : [];
 
     res.json({
       type: 'world_state',
@@ -74,7 +80,7 @@ module.exports = function worldRoute(conn) {
         ownerId: d.owner_id,
         ownerName: d.owner_name,
         fortificationLevel: d.fortification_level,
-        adjacentIds: JSON.parse(d.adjacent_ids),
+        adjacentIds: parseJson(d.adjacent_ids),
       })),
       corporations,
       alliances: alliances.map(a => ({

@@ -80,3 +80,23 @@ test('activeLaw is null when no law is active', async () => {
   const res = await request(app).get('/world');
   expect(res.body.activeLaw).toBeNull();
 });
+
+test('GET /world returns active alliances', async () => {
+  seasonId = createSeason(db);
+  createDistrictMap(db, seasonId);
+  db.prepare("UPDATE seasons SET status = 'active' WHERE id = ?").run(seasonId);
+
+  const corpAId = uuidv4();
+  const corpBId = uuidv4();
+  db.prepare("INSERT INTO corporations (id, season_id, name, api_key) VALUES (?, ?, 'CorpA', ?)").run(corpAId, seasonId, uuidv4());
+  db.prepare("INSERT INTO corporations (id, season_id, name, api_key) VALUES (?, ?, 'CorpB', ?)").run(corpBId, seasonId, uuidv4());
+
+  const allianceId = uuidv4();
+  db.prepare("INSERT INTO alliances (id, corp_a_id, corp_b_id, proposed_tick, formed_tick) VALUES (?, ?, ?, 1, 1)").run(allianceId, corpAId, corpBId);
+
+  const res = await request(app).get('/world');
+  expect(res.status).toBe(200);
+  expect(res.body.alliances.length).toBe(1);
+  expect(res.body.alliances[0].corpAId).toBe(corpAId);
+  expect(res.body.alliances[0].corpBId).toBe(corpBId);
+});
