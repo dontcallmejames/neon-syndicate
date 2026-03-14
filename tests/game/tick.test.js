@@ -204,4 +204,8 @@ test('runTick broadcasts tick_complete with correct tick number', async () => {
   expect(Array.isArray(payload.corporations)).toBe(true);
   expect(Array.isArray(payload.alliances)).toBe(true);
   expect(Array.isArray(payload.headlines)).toBe(true);
+  expect(payload.districts.length).toBeGreaterThan(0);
+  expect(payload.corporations.length).toBeGreaterThan(0);
+  expect(payload.corporations[0]).toHaveProperty('valuation');
+  expect(payload.corporations[0]).toHaveProperty('reputationLabel');
 });

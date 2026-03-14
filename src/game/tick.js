@@ -199,12 +199,8 @@ async function runTick(db, seasonId) {
       'SELECT name, effect FROM laws WHERE season_id = ? AND is_active = 1'
     ).get(seasonId);
 
-    const broadcastHeadlineEvent = conn.prepare(
-      "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' AND tick = ?"
-    ).get(seasonId, newTick);
-    const broadcastHeadlines = broadcastHeadlineEvent
-      ? broadcastHeadlineEvent.narrative.split('\n').filter(h => h.trim() !== '')
-      : [];
+    // Use the in-memory headlines array rather than re-querying what we just wrote
+    const broadcastHeadlines = Array.isArray(headlines) ? headlines.filter(h => h.trim() !== '') : [];
 
     broadcast({
       type: 'tick_complete',
