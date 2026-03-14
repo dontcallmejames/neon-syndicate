@@ -385,7 +385,13 @@ function hideReconnecting() { document.getElementById('reconnecting').style.disp
 function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen  = () => { retryMs = 500; hideReconnecting(); };
-  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onmessage = e => {
+    try {
+      render(JSON.parse(e.data));
+    } catch (err) {
+      console.error('[dashboard] Failed to parse WebSocket message:', err);
+    }
+  };
   ws.onclose   = () => {
     showReconnecting();
     retryMs = Math.min(retryMs * 2, 5000);
