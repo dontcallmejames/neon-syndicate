@@ -1,6 +1,7 @@
 // src/api/routes/action.js
 // Note: UNIQUE(corp_id, tick) on pending_actions enforces the one-submission-per-tick rule.
 // INSERT OR REPLACE handles the overwrite case atomically.
+const crypto = require('crypto');
 
 module.exports = function actionRoute(db) {
   return (req, res) => {
@@ -20,7 +21,7 @@ module.exports = function actionRoute(db) {
       return res.status(400).json({ error: 'provide either response (string) or actions (object)' });
     }
 
-    const id = require('crypto').randomUUID();
+    const id = crypto.randomUUID();
     const currentTick = season.tick_count;
 
     // INSERT OR REPLACE relies on UNIQUE(corp_id, tick) in the schema
