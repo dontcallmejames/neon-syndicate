@@ -98,3 +98,34 @@ test('DELETE /admin/corps/:id returns 404 for unknown corp', async () => {
   const res = await request(app).delete('/admin/corps/no-such-id').set(AUTH);
   expect(res.status).toBe(404);
 });
+
+test('DELETE /admin/corps/:id cleans up messages and lobby_votes', async () => {
+  // Insert a message from the corp
+  db.prepare("INSERT INTO messages (id, from_corp_id, to_corp_id, text, delivered_tick) VALUES (?, ?, ?, 'hello', 1)")
+    .run(crypto.randomUUID(), corpId, corpId);
+
+  // Insert a phase, law, and lobby_vote referencing corp
+  const phaseId = crypto.randomUUID();
+  db.prepare("INSERT INTO phases (id, season_id, phase_number, start_tick) VALUES (?, ?, 1, 1)")
+    .run(phaseId, seasonId);
+  const lawId = crypto.randomUUID();
+  db.prepare("INSERT INTO laws (id, season_id, name, effect) VALUES (?, ?, 'TestLaw', '{}')")
+    .run(lawId, seasonId);
+  db.prepare("INSERT INTO lobby_votes (id, phase_id, corp_id, law_id, credits) VALUES (?, ?, ?, ?, 10)")
+    .run(crypto.randomUUID(), phaseId, corpId, lawId);
+
+  await request(app).delete(`/admin/corps/${corpId}`).set(AUTH);
+
+  expect(db.prepare('SELECT * FROM messages WHERE from_corp_id = ?').get(corpId)).toBeUndefined();
+  expect(db.prepare('SELECT * FROM lobby_votes WHERE corp_id = ?').get(corpId)).toBeUndefined();
+});
+
+test('PATCH /admin/corps/:id returns 400 when no valid fields provided', async () => {
+  const res = await request(app).patch(`/admin/corps/${corpId}`).set(AUTH).send({ bogus: 999 });
+  expect(res.status).toBe(400);
+});
+
+test('PATCH /admin/corps/:id returns 400 for non-numeric delta', async () => {
+  const res = await request(app).patch(`/admin/corps/${corpId}`).set(AUTH).send({ credits: 'abc' });
+  expect(res.status).toBe(400);
+});

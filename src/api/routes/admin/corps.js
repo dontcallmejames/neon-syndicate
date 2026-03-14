@@ -40,15 +40,20 @@ module.exports = function adminCorpsRouter(db) {
     const values = [];
     for (const field of RESOURCE_FIELDS) {
       if (req.body[field] !== undefined) {
+        const delta = Number(req.body[field]);
+        if (!Number.isFinite(delta)) {
+          return res.status(400).json({ error: `Invalid value for field: ${field}` });
+        }
         updates.push(`${field} = MAX(0, ${field} + ?)`);
-        values.push(req.body[field]);
+        values.push(delta);
       }
     }
 
-    if (updates.length > 0) {
-      db.prepare(`UPDATE corporations SET ${updates.join(', ')} WHERE id = ?`)
-        .run(...values, req.params.id);
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid resource fields provided' });
     }
+    db.prepare(`UPDATE corporations SET ${updates.join(', ')} WHERE id = ?`)
+      .run(...values, req.params.id);
 
     res.json({ ok: true });
   });
@@ -63,6 +68,8 @@ module.exports = function adminCorpsRouter(db) {
       db.prepare('DELETE FROM alliances WHERE corp_a_id = ? OR corp_b_id = ?').run(corp.id, corp.id);
       db.prepare('DELETE FROM embargoes WHERE corp_id = ? OR target_corp_id = ?').run(corp.id, corp.id);
       db.prepare('DELETE FROM briefings WHERE corp_id = ?').run(corp.id);
+      db.prepare('DELETE FROM messages WHERE from_corp_id = ? OR to_corp_id = ?').run(corp.id, corp.id);
+      db.prepare('DELETE FROM lobby_votes WHERE corp_id = ?').run(corp.id);
       db.prepare('DELETE FROM corporations WHERE id = ?').run(corp.id);
     })();
 
