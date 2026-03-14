@@ -11,6 +11,7 @@ function initDb(db) {
       tick_count INTEGER NOT NULL DEFAULT 0,
       season_length INTEGER NOT NULL DEFAULT 200,
       scoring_weights TEXT NOT NULL DEFAULT '{}',
+      starting_resources TEXT NOT NULL DEFAULT '{}',
       is_ticking INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
     );
@@ -131,6 +132,9 @@ function initDb(db) {
       expires_tick INTEGER NOT NULL
     );
   `);
+  try {
+    conn.exec("ALTER TABLE seasons ADD COLUMN starting_resources TEXT NOT NULL DEFAULT '{}'");
+  } catch (_) { /* column already exists — safe to ignore */ }
   conn.pragma('foreign_keys = ON');
 }
 

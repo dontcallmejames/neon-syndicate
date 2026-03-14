@@ -72,3 +72,29 @@ test('POST /register returns 400 when name is missing', async () => {
   const res = await request(app).post('/register').send({});
   expect(res.status).toBe(400);
 });
+
+test('POST /register applies custom starting_resources from season', async () => {
+  db.prepare('UPDATE seasons SET starting_resources = ? WHERE id = ?')
+    .run(JSON.stringify({ credits: 999, energy: 777 }), seasonId);
+
+  const res = await request(app).post('/register').send({ name: 'ResourceCorp' });
+  expect(res.status).toBe(200);
+
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(res.body.agentId);
+  expect(corp.credits).toBe(999);
+  expect(corp.energy).toBe(777);
+  expect(corp.workforce).toBe(6); // schema default — not overridden
+});
+
+test('POST /register uses schema defaults when starting_resources is empty', async () => {
+  const res = await request(app).post('/register').send({ name: 'DefaultCorp' });
+  expect(res.status).toBe(200);
+
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(res.body.agentId);
+  expect(corp.credits).toBe(10);
+  expect(corp.energy).toBe(8);
+  expect(corp.workforce).toBe(6);
+  expect(corp.intelligence).toBe(4);
+  expect(corp.influence).toBe(0);
+  expect(corp.political_power).toBe(0);
+});

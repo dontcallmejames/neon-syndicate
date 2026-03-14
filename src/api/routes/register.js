@@ -34,10 +34,15 @@ module.exports = function registerRoute(db) {
     const corpId = crypto.randomUUID();
     const apiKey = crypto.randomUUID();
 
+    const CORP_DEFAULTS = { credits: 10, energy: 8, workforce: 6, intelligence: 4, influence: 0, political_power: 0 };
+    const sr = { ...CORP_DEFAULTS, ...JSON.parse(season.starting_resources || '{}') };
+
     db.prepare(`
-      INSERT INTO corporations (id, season_id, name, description, api_key)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(corpId, season.id, name, description, apiKey);
+      INSERT INTO corporations
+        (id, season_id, name, description, api_key, credits, energy, workforce, intelligence, influence, political_power)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(corpId, season.id, name, description, apiKey,
+      sr.credits, sr.energy, sr.workforce, sr.intelligence, sr.influence, sr.political_power);
 
     db.prepare('UPDATE districts SET owner_id = ? WHERE id = ?').run(corpId, district.id);
 
