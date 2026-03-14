@@ -168,3 +168,15 @@ test('POST /admin/seasons/:id/tick returns 409 if is_ticking = 1', async () => {
   expect(res.status).toBe(409);
   expect(res.body.error).toMatch(/in progress/i);
 });
+
+test('POST /admin/seasons/:id/tick returns 500 when tick execution fails', async () => {
+  const seasonId = createSeason(db); createDistrictMap(db, seasonId);
+  db.prepare("UPDATE seasons SET status = 'active' WHERE id = ?").run(seasonId);
+
+  // Drop the pending_actions table to make runTick fail internally
+  db.exec('DROP TABLE IF EXISTS pending_actions');
+
+  const res = await request(app).post(`/admin/seasons/${seasonId}/tick`).set(AUTH);
+  expect(res.status).toBe(500);
+  expect(res.body.error).toBeDefined();
+});
