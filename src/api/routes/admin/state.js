@@ -14,7 +14,12 @@ module.exports = function adminStateHandler(db) {
     }
 
     const seasonOut = {
-      ...season,
+      id: season.id,
+      status: season.status,
+      tick_count: season.tick_count,
+      season_length: season.season_length,
+      tick_interval_ms: season.tick_interval_ms,
+      is_ticking: season.is_ticking,
       scoring_weights: JSON.parse(season.scoring_weights || '{}'),
       starting_resources: JSON.parse(season.starting_resources || '{}'),
     };
@@ -44,7 +49,7 @@ module.exports = function adminStateHandler(db) {
     ).get(season.id) || null;
 
     const recentEvents = db.prepare(
-      "SELECT id, type, tick, narrative FROM events WHERE season_id = ? ORDER BY tick DESC LIMIT 10"
+      "SELECT id, type, tick, narrative FROM events WHERE season_id = ? ORDER BY tick DESC, rowid DESC LIMIT 10"
     ).all(season.id);
 
     res.json({ season: seasonOut, corps, districts, activeLaw, recentEvents });
