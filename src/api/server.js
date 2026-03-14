@@ -23,6 +23,7 @@ function createServer(db) {
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
   // Static file serving after routes
+  // public/ created in Task 7 — no-op until then
   app.use(express.static(path.join(__dirname, '../../public')));
 
   const httpServer = http.createServer(app);

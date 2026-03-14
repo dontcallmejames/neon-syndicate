@@ -7,9 +7,9 @@ const { startTickLoop } = require('./game/tick');
 
 async function main() {
   initDb();
-  const app = createServer();
+  const { httpServer } = createServer();
   const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`Neon Syndicate running on port ${port}`));
+  httpServer.listen(port, () => console.log(`Neon Syndicate running on port ${port}`));
   startTickLoop();
 }
 
