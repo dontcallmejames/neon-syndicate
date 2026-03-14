@@ -49,7 +49,28 @@ function createSeason(db, options = {}) {
     INSERT INTO seasons (id, status, tick_interval_ms, season_length)
     VALUES (?, 'pending', ?, ?)
   `).run(id, tickIntervalMs, seasonLength);
+  createLaws(conn, id);
   return id;
+}
+
+const LAWS = [
+  { name: 'Data Sovereignty Act',       effect: 'data_center_bonus' },
+  { name: 'Labor Protection Bill',      effect: 'labor_zone_attack_cost' },
+  { name: 'Free Market Decree',         effect: 'free_trade' },
+  { name: 'Crackdown Order',            effect: 'crackdown' },
+  { name: 'Corporate Transparency Act', effect: 'transparency' },
+  { name: 'Infrastructure Investment',  effect: 'fortify_discount' },
+  { name: 'Security Lockdown',          effect: 'security_lockdown' },
+  { name: 'Open Borders',               effect: 'open_borders' },
+];
+
+function createLaws(db, seasonId) {
+  const stmt = db.prepare(
+    'INSERT OR IGNORE INTO laws (id, season_id, name, effect) VALUES (?, ?, ?, ?)'
+  );
+  for (const law of LAWS) {
+    stmt.run(crypto.randomUUID(), seasonId, law.name, law.effect);
+  }
 }
 
 function createDistrictMap(db, seasonId) {
@@ -71,4 +92,4 @@ function createDistrictMap(db, seasonId) {
   return ids;
 }
 
-module.exports = { createSeason, createDistrictMap };
+module.exports = { createSeason, createDistrictMap, createLaws, LAWS };

@@ -67,3 +67,14 @@ test('adjacency is symmetric', () => {
     }
   }
 });
+
+test('createSeason seeds all 8 laws', () => {
+  const db = new Database(':memory:');
+  initDb(db);
+  const seasonId = createSeason(db);
+  const laws = db.prepare('SELECT * FROM laws WHERE season_id = ?').all(seasonId);
+  expect(laws).toHaveLength(8);
+  expect(laws.map(l => l.name)).toContain('Data Sovereignty Act');
+  expect(laws.map(l => l.effect)).toContain('data_center_bonus');
+  db.close();
+});

@@ -48,7 +48,8 @@ function initDb(db) {
       id TEXT PRIMARY KEY,
       corp_a_id TEXT NOT NULL,
       corp_b_id TEXT NOT NULL,
-      formed_tick INTEGER NOT NULL,
+      proposed_tick INTEGER NOT NULL,
+      formed_tick INTEGER,
       broken_tick INTEGER,
       broken_by_corp_id TEXT
     );
@@ -90,15 +91,16 @@ function initDb(db) {
       effect TEXT NOT NULL,
       active_since INTEGER,
       is_active INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (season_id) REFERENCES seasons(id)
+      UNIQUE(season_id, name),
+      FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS lobby_votes (
       id TEXT PRIMARY KEY,
       phase_id TEXT NOT NULL,
       corp_id TEXT NOT NULL,
-      credits INTEGER NOT NULL,
-      FOREIGN KEY (phase_id) REFERENCES phases(id)
+      law_id TEXT NOT NULL,
+      credits INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS pending_actions (
@@ -119,6 +121,13 @@ function initDb(db) {
       payload TEXT NOT NULL,
       created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
       UNIQUE(corp_id, tick)
+    );
+
+    CREATE TABLE IF NOT EXISTS embargoes (
+      id TEXT PRIMARY KEY,
+      corp_id TEXT NOT NULL,
+      target_corp_id TEXT NOT NULL,
+      expires_tick INTEGER NOT NULL
     );
   `);
   conn.pragma('foreign_keys = ON');

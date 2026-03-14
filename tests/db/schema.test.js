@@ -50,3 +50,37 @@ test('pending_actions has unique constraint on corp_id + tick', () => {
     db.prepare(`INSERT INTO pending_actions (id, corp_id, tick) VALUES ('a2', 'c1', 1)`).run();
   }).toThrow();
 });
+
+test('alliances table accepts proposed_tick and nullable formed_tick', () => {
+  const db = new Database(':memory:');
+  initDb(db);
+  db.prepare(
+    "INSERT INTO alliances (id, corp_a_id, corp_b_id, proposed_tick) VALUES ('a1','c1','c2',1)"
+  ).run();
+  const row = db.prepare("SELECT * FROM alliances WHERE id = 'a1'").get();
+  expect(row.proposed_tick).toBe(1);
+  expect(row.formed_tick).toBeNull();
+  db.close();
+});
+
+test('embargoes table exists with required columns', () => {
+  const db = new Database(':memory:');
+  initDb(db);
+  db.prepare(
+    "INSERT INTO embargoes (id, corp_id, target_corp_id, expires_tick) VALUES ('e1','c1','c2',5)"
+  ).run();
+  const row = db.prepare("SELECT * FROM embargoes WHERE id = 'e1'").get();
+  expect(row.expires_tick).toBe(5);
+  db.close();
+});
+
+test('lobby_votes has law_id column', () => {
+  const db = new Database(':memory:');
+  initDb(db);
+  db.prepare(
+    "INSERT INTO lobby_votes (id, phase_id, corp_id, law_id, credits) VALUES ('v1','p1','c1','l1',10)"
+  ).run();
+  const row = db.prepare("SELECT * FROM lobby_votes WHERE id = 'v1'").get();
+  expect(row.law_id).toBe('l1');
+  db.close();
+});
