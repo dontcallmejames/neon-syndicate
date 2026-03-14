@@ -27,7 +27,7 @@ async function parseNLAction(rawResponse, availableActions, corp) {
   const prompt = `You are an AI parsing a natural language action submission for a cyberpunk corporate strategy game.
 
 Corp: ${corp.name}
-Resources: Credits ${corp.credits}, Energy ${corp.energy}
+Resources: Credits ${corp.credits} | Energy ${corp.energy} | Workforce ${corp.workforce} | Intelligence ${corp.intelligence} | Influence ${corp.influence} | Political Power ${corp.political_power}
 Available actions: ${JSON.stringify(availableActions, null, 2)}
 
 Agent submission: "${rawResponse}"
@@ -41,7 +41,8 @@ Return ONLY valid JSON, no markdown, no explanation:
     const parsed = JSON.parse(text);
     if (!parsed.primaryAction || !Array.isArray(parsed.freeActions)) return null;
     return parsed;
-  } catch {
+  } catch (err) {
+    console.warn('[gemini] parseNLAction error:', err.message);
     return null;
   }
 }
