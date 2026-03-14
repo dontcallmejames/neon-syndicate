@@ -78,6 +78,38 @@ test('CI nullifies sabotage targeting the CI corp', () => {
   expect(d.sabotaged_until).toBe(0);
 });
 
+test('counter_intelligence deducts costs from CI corp', () => {
+  makeCorp('ci-corp', 'CIUser', { energy: 10, influence: 10, intelligence: 15 });
+  submitAction('ci-corp', 1, { primaryAction: { type: 'counter_intelligence' }, freeActions: [] });
+
+  resolveActions(db, seasonId, 1);
+
+  const corp = db.prepare('SELECT energy, influence FROM corporations WHERE id = ?').get('ci-corp');
+  expect(corp.energy).toBe(7);
+  expect(corp.influence).toBe(5);
+});
+
+test('CI nullification under security_lockdown deducts doubled energy from attacker', () => {
+  // Activate the pre-existing security_lockdown law
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'security_lockdown'")
+    .run(seasonId);
+
+  makeCorp('ci-corp', 'CIUser', { energy: 20, influence: 10, intelligence: 15 });
+  makeCorp('attacker', 'Attacker', { energy: 30, credits: 50, influence: 20 });
+
+  const targetD = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  db.prepare('UPDATE districts SET owner_id = ? WHERE id = ?').run('ci-corp', targetD.id);
+
+  submitAction('ci-corp', 1, { primaryAction: { type: 'counter_intelligence' }, freeActions: [] });
+  submitAction('attacker', 1, { primaryAction: { type: 'sabotage', targetDistrictId: targetD.id }, freeActions: [] });
+
+  resolveActions(db, seasonId, 1);
+
+  // Under security_lockdown, sabotage energy cost doubles from 4 to 8
+  const attacker = db.prepare('SELECT energy FROM corporations WHERE id = ?').get('attacker');
+  expect(attacker.energy).toBe(22); // 30 - 8
+});
+
 test('feared mechanic applied during resolve', () => {
   makeCorp('pariah-corp', 'Pariah', { credits: 0, reputation: 10 });
   makeCorp('rich-corp', 'Rich', { credits: 100 });

@@ -37,6 +37,10 @@ function resolveActions(db, seasonId, tick) {
   // Nullify covert actions targeting CI corps; consume their costs
   const nullifiedRowIds = new Set();
   if (ciCorpIds.size > 0) {
+    const activeLaw = db.prepare(
+      'SELECT effect FROM laws WHERE season_id = ? AND is_active = 1'
+    ).get(seasonId);
+
     for (const row of pendingRows) {
       const parsed = JSON.parse(row.parsed_actions);
       const pa = parsed.primaryAction;
@@ -51,9 +55,18 @@ function resolveActions(db, seasonId, tick) {
       // Nullify: consume costs, mark as resolved, skip execution
       const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(row.corp_id);
       const isPariah = corp.reputation < 15;
-      const energyCost = pa.type === 'sabotage' ? 4 : pa.type === 'leak_scandal' ? 2 : 8;
+      let energyCost = pa.type === 'sabotage' ? 4 : pa.type === 'leak_scandal' ? 2 : 8;
       const creditCost = pa.type === 'sabotage' ? 15 : pa.type === 'leak_scandal' ? 10 : 15;
-      const influenceCost = isPariah ? 0 : (pa.type === 'corporate_assassination' ? 10 : 5);
+      let influenceCost = isPariah ? 0 : (pa.type === 'corporate_assassination' ? 10 : 5);
+
+      // Apply law modifiers (same logic as validate.js)
+      if (activeLaw?.effect === 'security_lockdown' && pa.type !== 'corporate_assassination') {
+        energyCost *= 2;
+      }
+      if (activeLaw?.effect === 'crackdown' && pa.type !== 'corporate_assassination' && !isPariah) {
+        influenceCost *= 2;
+      }
+
       db.prepare('UPDATE corporations SET energy = energy - ?, credits = credits - ?, influence = MAX(0, influence - ?) WHERE id = ?')
         .run(energyCost, creditCost, influenceCost, row.corp_id);
       db.prepare("UPDATE pending_actions SET status = 'resolved' WHERE id = ?").run(row.id);
@@ -97,6 +110,16 @@ function resolveActions(db, seasonId, tick) {
       if (ALLIANCE_TYPES.includes(fa.type)) allianceActions.push(entry);
       else if (TRADE_TYPES.includes(fa.type)) tradeActions.push(entry);
       else if (SOCIAL_TYPES.includes(fa.type)) socialActions.push(entry);
+    }
+  }
+
+  // Deduct costs for counter_intelligence primary actions
+  // (CI protection was already recorded via ciCorpIds; costs must be consumed here)
+  for (const { row, parsed } of Object.values(validActions)) {
+    const primaryAction = parsed.primaryAction;
+    if (primaryAction && primaryAction.type === 'counter_intelligence') {
+      db.prepare('UPDATE corporations SET energy = energy - 3, influence = influence - 5 WHERE id = ?')
+        .run(row.corp_id);
     }
   }
 
