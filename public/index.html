@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Syndicate</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #030712;
+      color: #e5e7eb;
+      font-family: 'Courier New', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ──────────────────────────────────────────── */
+    #header {
+      background: #0a0a1a;
+      border-bottom: 1px solid #1f2937;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+      flex-shrink: 0;
+    }
+    #title { color: #a78bfa; font-size: 14px; font-weight: bold; letter-spacing: 3px; }
+    #status-bar { color: #4b5563; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+    #tick-display { color: #6366f1; }
+    #live-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    #live-label { color: #22c55e; }
+    #reconnecting { color: #f59e0b; display: none; }
+
+    /* ── Map ─────────────────────────────────────────────── */
+    #map-area { flex: 1; position: relative; overflow: hidden; }
+    #map-svg { width: 100%; height: 100%; cursor: grab; }
+    #map-svg:active { cursor: grabbing; }
+    #zoom-hint {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #1a2035;
+      font-size: 10px;
+      letter-spacing: 2px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* ── Overlays ─────────────────────────────────────────── */
+    .overlay {
+      position: absolute;
+      background: rgba(10,10,26,0.88);
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 10px 14px;
+      backdrop-filter: blur(6px);
+    }
+    .overlay-label {
+      color: #4b5563;
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    /* ── Leaderboard ─────────────────────────────────────── */
+    #leaderboard { top: 12px; right: 12px; min-width: 195px; }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      margin-bottom: 5px;
+    }
+    .lb-row:last-child { margin-bottom: 0; }
+    .lb-rank { width: 16px; font-size: 10px; color: #4b5563; flex-shrink: 0; }
+    .lb-rank.gold { color: #fbbf24; }
+    .lb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .lb-name { flex: 1; color: #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-val { font-size: 10px; color: #6b7280; flex-shrink: 0; }
+
+    /* ── Law banner ──────────────────────────────────────── */
+    #law-banner { top: 12px; left: 12px; }
+    #law-name { color: #fbbf24; font-size: 10px; }
+
+    /* ── Ticker ──────────────────────────────────────────── */
+    #ticker {
+      background: #0a0a1a;
+      border-top: 1px solid #1f2937;
+      height: 40px;
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+    #ticker-track {
+      white-space: nowrap;
+      font-size: 11px;
+      color: #9ca3af;
+      will-change: transform;
+    }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+    @keyframes ticker-anim {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">NEON SYNDICATE</div>
+  <div id="status-bar">
+    TICK&nbsp;<span id="tick-display">—</span>
+    &nbsp;·&nbsp; SEASON 1
+    &nbsp;·&nbsp;
+    <span id="live-dot"></span>
+    <span id="live-label">LIVE</span>
+    &nbsp;&nbsp;
+    <span id="reconnecting">⚠ RECONNECTING…</span>
+  </div>
+</div>
+
+<div id="map-area">
+  <svg id="map-svg"></svg>
+  <div id="zoom-hint">SCROLL TO ZOOM · DRAG TO PAN</div>
+
+  <div class="overlay" id="leaderboard">
+    <div class="overlay-label">Leaderboard</div>
+    <div id="leaderboard-rows"></div>
+  </div>
+
+  <div class="overlay" id="law-banner" style="display:none">
+    <div class="overlay-label">Active Law</div>
+    <div id="law-name"></div>
+  </div>
+</div>
+
+<div id="ticker">
+  <div id="ticker-track"></div>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const PALETTE = [
+  '#7c3aed', // purple
+  '#2563eb', // blue
+  '#db2777', // pink
+  '#16a34a', // green
+  '#ea580c', // orange
+  '#0891b2', // cyan
+  '#ca8a04', // yellow
+  '#dc2626', // red
+];
+
+const TYPE_EMOJI = {
+  financial_hub:      '💰',
+  power_grid:         '⚡',
+  labor_zone:         '👷',
+  data_center:        '💾',
+  black_market:       '🕶️',
+  government_quarter: '🏛️',
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+const corpColors  = {};   // corpId → hex color
+let   mapInitialized = false;
+let   simNodes    = [];   // d3 force nodes (have .x, .y after sim)
+let   simLinks    = [];   // d3 force links
+
+// ── Color assignment ─────────────────────────────────────────────────────────
+// Corps are always delivered ORDER BY rowid ASC from the server.
+// We assign palette colors by their position in that first /world response.
+let nextPaletteIndex = 0;
+function assignColor(corpId) {
+  if (!corpColors[corpId]) {
+    corpColors[corpId] = PALETTE[nextPaletteIndex % PALETTE.length];
+    nextPaletteIndex++;
+  }
+  return corpColors[corpId];
+}
+
+// ── D3 SVG setup ─────────────────────────────────────────────────────────────
+const svg = d3.select('#map-svg');
+const g   = svg.append('g');
+
+const zoom = d3.zoom()
+  .scaleExtent([0.25, 5])
+  .on('zoom', event => g.attr('transform', event.transform));
+svg.call(zoom);
+
+const linkLayer = g.append('g').attr('class', 'links');
+const nodeLayer = g.append('g').attr('class', 'nodes');
+
+// ── Map init (runs once on first /world response with districts) ──────────────
+function initMap(districts) {
+  // Build force nodes and links from adjacency data
+  simNodes = districts.map(d => ({ id: d.id, name: d.name, type: d.type }));
+
+  const seen = new Set();
+  simLinks = [];
+  districts.forEach(d => {
+    (d.adjacentIds || []).forEach(adjId => {
+      const key = [d.id, adjId].sort().join('|');
+      if (!seen.has(key)) {
+        seen.add(key);
+        simLinks.push({ source: d.id, target: adjId });
+      }
+    });
+  });
+
+  // Run force simulation synchronously (tick many times then stop)
+  const w = svg.node().clientWidth  || 800;
+  const h = svg.node().clientHeight || 600;
+
+  const sim = d3.forceSimulation(simNodes)
+    .force('link',   d3.forceLink(simLinks).id(d => d.id).distance(90))
+    .force('charge', d3.forceManyBody().strength(-250))
+    .force('center', d3.forceCenter(w / 2, h / 2))
+    .stop();
+
+  // Tick synchronously until stable (~300 iterations is enough for 24 nodes)
+  for (let i = 0; i < 300; i++) sim.tick();
+
+  // Hide hint once map is ready
+  document.getElementById('zoom-hint').style.opacity = '0';
+  mapInitialized = true;
+}
+
+// ── Map render (runs on every /world and tick_complete) ──────────────────────
+function renderMap(districts) {
+  const byId = Object.fromEntries(districts.map(d => [d.id, d]));
+
+  // ── Links ──
+  const linkSel = linkLayer.selectAll('line')
+    .data(simLinks, d => `${d.source.id || d.source}|${d.target.id || d.target}`);
+
+  linkSel.enter().append('line')
+    .attr('stroke', '#1f2937')
+    .attr('stroke-width', 1.5)
+    .merge(linkSel)
+    .attr('x1', d => node(d.source).x)
+    .attr('y1', d => node(d.source).y)
+    .attr('x2', d => node(d.target).x)
+    .attr('y2', d => node(d.target).y);
+
+  // ── Nodes ──
+  const nodeSel = nodeLayer.selectAll('g.node')
+    .data(simNodes, d => d.id);
+
+  // Enter: create group with circle + two text elements
+  const entered = nodeSel.enter().append('g').attr('class', 'node');
+  entered.append('circle').attr('r', 20).attr('stroke-width', 2);
+  entered.append('text').attr('class', 'em')
+    .attr('text-anchor', 'middle').attr('dy', '0.35em')
+    .style('font-size', '13px').style('pointer-events', 'none');
+  entered.append('text').attr('class', 'lbl')
+    .attr('text-anchor', 'middle').attr('dy', '34px')
+    .style('font-size', '9px').style('pointer-events', 'none');
+
+  const all = entered.merge(nodeSel)
+    .attr('transform', d => `translate(${d.x},${d.y})`);
+
+  all.select('circle')
+    .attr('fill', d => {
+      const dist = byId[d.id];
+      return dist && dist.ownerId ? corpColors[dist.ownerId] || '#374151' : '#111827';
+    })
+    .attr('stroke', d => {
+      const dist = byId[d.id];
+      if (!dist || !dist.ownerId) return '#374151';
+      return corpColors[dist.ownerId] || '#374151';
+    });
+
+  all.select('.em')
+    .text(d => TYPE_EMOJI[d.type] || '?')
+    .attr('fill', d => byId[d.id] && byId[d.id].ownerId ? '#ffffff' : '#6b7280');
+
+  all.select('.lbl')
+    .text(d => d.name.length > 11 ? d.name.slice(0, 10) + '…' : d.name)
+    .attr('fill', d => {
+      const dist = byId[d.id];
+      if (!dist || !dist.ownerId) return '#374151';
+      return corpColors[dist.ownerId] || '#6b7280';
+    });
+}
+
+// Helper: resolve a d3 link endpoint to its node object
+function node(ref) {
+  return typeof ref === 'object' ? ref : simNodes.find(n => n.id === ref);
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+function renderLeaderboard(corporations) {
+  const sorted = [...corporations].sort((a, b) => b.valuation - a.valuation);
+  document.getElementById('leaderboard-rows').innerHTML = sorted.map((corp, i) => `
+    <div class="lb-row">
+      <span class="lb-rank${i === 0 ? ' gold' : ''}">${i + 1}</span>
+      <span class="lb-dot" style="background:${corpColors[corp.id] || '#6b7280'}"></span>
+      <span class="lb-name">${corp.name}</span>
+      <span class="lb-val" style="color:${corpColors[corp.id] || '#6b7280'}">
+        ${corp.valuation.toLocaleString()}
+      </span>
+    </div>
+  `).join('');
+}
+
+// ── Active law ────────────────────────────────────────────────────────────────
+function renderLaw(activeLaw) {
+  const banner = document.getElementById('law-banner');
+  if (activeLaw) {
+    document.getElementById('law-name').textContent = '⚖️  ' + activeLaw.name;
+    banner.style.display = '';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// ── Headline ticker ───────────────────────────────────────────────────────────
+function renderTicker(headlines) {
+  if (!headlines || headlines.length === 0) return;
+  const joined = headlines.join('   ·   ');
+  // Duplicate text so the loop is seamless regardless of text width
+  const full = joined + '          ' + joined + '          ';
+  const track = document.getElementById('ticker-track');
+  track.textContent = full;
+
+  // Measure text width to set animation duration proportional to length
+  // ~80px/s feels natural; min 10s to avoid a flicker on very short text
+  const charWidth = 7; // approximate px per character in 11px monospace
+  const totalWidth = full.length * charWidth;
+  const duration = Math.max(10, totalWidth / 80);
+
+  track.style.animation = 'none';
+  void track.offsetWidth; // force reflow to restart animation
+  track.style.animation = `ticker-anim ${duration}s linear infinite`;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function render(data) {
+  // Assign colors (stable — corps arrive ORDER BY rowid ASC)
+  data.corporations.forEach(corp => assignColor(corp.id));
+
+  document.getElementById('tick-display').textContent = data.tick || '—';
+  renderLeaderboard(data.corporations);
+  renderLaw(data.activeLaw);
+  if (data.headlines && data.headlines.length > 0) renderTicker(data.headlines);
+
+  if (!mapInitialized && data.districts && data.districts.length > 0) {
+    initMap(data.districts);
+    renderMap(data.districts);
+  } else if (mapInitialized && data.districts) {
+    renderMap(data.districts);
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+let retryMs = 500;
+
+function showReconnecting() { document.getElementById('reconnecting').style.display = 'inline'; }
+function hideReconnecting() { document.getElementById('reconnecting').style.display = 'none'; }
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => { retryMs = 500; hideReconnecting(); };
+  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onclose   = () => {
+    showReconnecting();
+    retryMs = Math.min(retryMs * 2, 5000);
+    setTimeout(connect, retryMs);
+  };
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+fetch('/world')
+  .then(r => r.json())
+  .then(data => render(data))
+  .catch(err => console.error('[dashboard] Failed to load world state:', err));
+
+connect();
+</script>
+</body>
+</html>
