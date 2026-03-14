@@ -392,17 +392,29 @@ function renderCorps() {
       <td>${c.intelligence}</td><td>${c.influence}</td><td>${c.political_power}</td>
       <td>${c.reputation}</td><td>${c.districtCount}</td>
       <td>
-        <button class="btn" onclick="toggleAdjust('${c.id}')">ADJUST</button>
-        <button class="btn btn-danger" onclick="banCorp('${c.id}','${escHtml(c.name)}')">BAN</button>
+        <button class="btn" data-corp-id="${c.id}">ADJUST</button>
+        <button class="btn btn-danger" data-corp-id="${c.id}">BAN</button>
         <div class="adjust-form" id="adj-${c.id}">
           ${['credits','energy','workforce','intelligence','influence','political_power','reputation'].map(f =>
             `<div class="adjust-row"><label>${f}</label><input type="number" id="adj-${c.id}-${f}" value="0"></div>`
           ).join('')}
-          <button class="btn btn-primary" onclick="applyAdjust('${c.id}')">APPLY DELTA</button>
+          <button class="btn btn-primary" data-corp-id="${c.id}">APPLY DELTA</button>
         </div>
       </td>
     </tr>
   `).join('');
+
+  tbody.querySelectorAll('[data-corp-id]').forEach(btn => {
+    const corpId = btn.dataset.corpId;
+    const corp = corps.find(c => c.id === corpId);
+    if (btn.classList.contains('btn-danger')) {
+      btn.addEventListener('click', () => banCorp(corpId, corp.name));
+    } else if (btn.textContent === 'ADJUST') {
+      btn.addEventListener('click', () => toggleAdjust(corpId));
+    } else if (btn.textContent === 'APPLY DELTA') {
+      btn.addEventListener('click', () => applyAdjust(corpId));
+    }
+  });
 }
 
 function toggleAdjust(id) {
@@ -544,7 +556,8 @@ document.getElementById('btn-load-more').addEventListener('click', () => loadLog
 let retryMs = 500;
 
 function connect() {
-  const ws = new WebSocket(`ws://${location.host}/ws`);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onopen = () => {
     retryMs = 500;
     document.getElementById('reconnecting').style.display = 'none';
@@ -583,9 +596,17 @@ if (savedKey) {
       document.getElementById('key-error').style.display = 'block';
       return;
     }
+    if (!res.ok) {
+      document.getElementById('key-error').textContent = `Server error (${res.status}) — try refreshing`;
+      document.getElementById('key-error').style.display = 'block';
+      return;
+    }
     document.getElementById('key-overlay').style.display = 'none';
     state = await res.json();
     init();
+  }).catch(() => {
+    document.getElementById('key-error').textContent = 'Cannot reach server — try refreshing';
+    document.getElementById('key-error').style.display = 'block';
   });
 }
 </script>
