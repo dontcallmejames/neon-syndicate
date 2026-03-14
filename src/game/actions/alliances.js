@@ -53,7 +53,7 @@ function resolveAlliances(db, seasonId, tick, allianceActions) {
 
     if (action.type === 'decline_alliance') {
       const alliance = db.prepare('SELECT * FROM alliances WHERE id = ?').get(action.allianceId);
-      if (!alliance || alliance.corp_b_id !== corpId || alliance.formed_tick !== null) continue;
+      if (!alliance || alliance.corp_b_id !== corpId || alliance.formed_tick !== null || alliance.broken_tick !== null) continue;
       db.prepare('UPDATE alliances SET broken_tick = ?, broken_by_corp_id = ? WHERE id = ?')
         .run(tick, corpId, alliance.id);
       continue;

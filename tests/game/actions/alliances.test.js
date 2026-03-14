@@ -69,3 +69,21 @@ test('break_alliance costs -10 reputation', () => {
   const corp = db.prepare('SELECT reputation FROM corporations WHERE id = ?').get('c1');
   expect(corp.reputation).toBe(40); // 50 - 10
 });
+
+test('decline_alliance sets broken_tick on pending proposal', () => {
+  makeCorp('c1', 'Corp1');
+  makeCorp('c2', 'Corp2');
+  db.prepare('INSERT INTO alliances (id, corp_a_id, corp_b_id, proposed_tick) VALUES (?, ?, ?, ?)')
+    .run('a1', 'c1', 'c2', 1);
+
+  resolveAlliances(db, seasonId, 2, [
+    { corpId: 'c2', action: { type: 'decline_alliance', allianceId: 'a1' } }
+  ]);
+
+  const alliance = db.prepare('SELECT * FROM alliances WHERE id = ?').get('a1');
+  expect(alliance.broken_tick).toBe(2);
+  expect(alliance.formed_tick).toBeNull(); // was never formed
+  // No reputation change
+  const corp = db.prepare('SELECT reputation FROM corporations WHERE id = ?').get('c2');
+  expect(corp.reputation).toBe(50);
+});
