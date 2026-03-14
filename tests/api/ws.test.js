@@ -22,8 +22,15 @@ function wsConnect(server) {
 
 // Helper: close a server
 function closeServer(server) {
-  return new Promise(resolve => server.close(resolve));
+  return new Promise(resolve => {
+    server.closeAllConnections();
+    server.close(resolve);
+  });
 }
+
+afterEach(() => {
+  jest.resetModules();
+});
 
 test('broadcast() before createWsServer is called — no-op, no throw', () => {
   // Use isolateModules to get a fresh module with _wss = null
