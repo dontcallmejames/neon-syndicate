@@ -4,6 +4,7 @@ function makeRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn() };
 }
 
+beforeEach(() => { delete process.env.ADMIN_KEY; });
 afterEach(() => { delete process.env.ADMIN_KEY; });
 
 test('returns 503 when ADMIN_KEY env var is not set', () => {
