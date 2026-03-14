@@ -213,3 +213,33 @@ test('Trusted corp lobby minimum is 8 credits', () => {
   }, 1);
   expect(result.valid).toBe(true); // Trusted: min is 8, not 10
 });
+
+test('security_lockdown doubles leak_scandal energy cost', () => {
+  const corp = makeCorp({ energy: 3, credits: 20, influence: 10 }); // leak_scandal normally 2E; lockdown → 4E; corp has 3 → fail
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'security_lockdown'").run(seasonId);
+  const result = validateActions(db, corp, {
+    primaryAction: { type: 'leak_scandal', targetCorpId: 'x' },
+    freeActions: [],
+  }, 1);
+  expect(result.valid).toBe(false); // need 4E, have 3
+  expect(result.reason).toMatch(/energy/i);
+});
+
+test('corporate_assassination: Pariah with 0 influence succeeds (influence waived)', () => {
+  const corp = makeCorp({ reputation: 10, energy: 20, credits: 20, influence: 0 });
+  const result = validateActions(db, corp, {
+    primaryAction: { type: 'corporate_assassination', targetCorpId: 'x' },
+    freeActions: [],
+  }, 1);
+  expect(result.valid).toBe(true); // Pariah: influence cost = 0
+});
+
+test('attack with missing energySpent is rejected', () => {
+  const corp = makeCorp({ energy: 20, credits: 20 });
+  const result = validateActions(db, corp, {
+    primaryAction: { type: 'attack', targetDistrictId: 'some-id' }, // no energySpent field
+    freeActions: [],
+  }, 1);
+  expect(result.valid).toBe(false);
+  expect(result.reason).toMatch(/minimum/i);
+});

@@ -13,8 +13,11 @@ const PRIMARY_BASE_COSTS = {
 const COVERT_OPS = ['sabotage', 'leak_scandal', 'corporate_assassination'];
 
 function getActiveLawEffect(db, seasonId) {
-  const law = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1").get(seasonId);
-  return law ? law.effect : null;
+  const laws = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1").all(seasonId);
+  if (laws.length > 1) {
+    console.warn(`[validate] Multiple active laws for season ${seasonId} — using first`);
+  }
+  return laws.length > 0 ? laws[0].effect : null;
 }
 
 function computePrimaryEnergyCost(actionType, action, lawEffect, db) {
