@@ -49,6 +49,13 @@ module.exports = function briefingRoute(db) {
       "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' AND tick = ?"
     ).all(corp.season_id, currentTick).map(e => e.narrative);
 
+    const pendingAlliances = db.prepare(`
+      SELECT a.corp_a_id AS proposing_corp_id, c.name AS proposing_corp_name
+      FROM alliances a
+      JOIN corporations c ON c.id = a.corp_a_id
+      WHERE a.corp_b_id = ? AND a.formed_tick IS NULL AND a.broken_tick IS NULL
+    `).all(corp.id);
+
     const activeLaw = db.prepare(
       'SELECT name, effect FROM laws WHERE season_id = ? AND is_active = 1'
     ).get(corp.season_id);
@@ -80,7 +87,7 @@ module.exports = function briefingRoute(db) {
       reputation: corp.reputation,
       reputationLabel,
       alliances,
-      pendingAlliances: [], // TODO Plan 2: alliance proposal routing
+      pendingAlliances,
       activeLaw: activeLaw || null,
       availableActions: buildAvailableActions(isPariah),
       narrative: null, // TODO Plan 4: Gemini integration

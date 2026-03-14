@@ -67,3 +67,27 @@ test('GET /briefing/:agentId returns stored briefing when available', async () =
 
   expect(res.body.resources.credits).toBe(99);
 });
+
+test('GET /briefing/:agentId returns pendingAlliances', async () => {
+  // Create a proposing corp
+  const proposerCorpId = uuidv4();
+  db.prepare(`INSERT INTO corporations (id, season_id, name, api_key) VALUES (?, ?, 'ProposerCorp', ?)`)
+    .run(proposerCorpId, seasonId, uuidv4());
+
+  // Insert a pending alliance: corp_a = proposer, corp_b = corpId (receiver)
+  // formed_tick IS NULL, broken_tick IS NULL = pending proposal
+  db.prepare(`
+    INSERT INTO alliances (id, corp_a_id, corp_b_id, proposed_tick)
+    VALUES (?, ?, ?, 0)
+  `).run(uuidv4(), proposerCorpId, corpId);
+
+  const res = await request(app)
+    .get(`/briefing/${corpId}`)
+    .set('Authorization', `Bearer ${apiKey}`);
+
+  expect(res.status).toBe(200);
+  expect(res.body.pendingAlliances).toBeInstanceOf(Array);
+  expect(res.body.pendingAlliances).toHaveLength(1);
+  expect(res.body.pendingAlliances[0].proposing_corp_id).toBe(proposerCorpId);
+  expect(res.body.pendingAlliances[0].proposing_corp_name).toBe('ProposerCorp');
+});

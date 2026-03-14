@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { getDb } = require('../db/index');
 const { generateResources } = require('./resources');
 const { calculateValuation } = require('./valuation');
+const { resolveActions } = require('./actions/resolve');
 
 function buildBriefingPayload(db, corp, season) {
   const holdings = db.prepare(
@@ -30,6 +31,13 @@ function buildBriefingPayload(db, corp, season) {
   const headlines = db.prepare(
     "SELECT narrative FROM events WHERE season_id = ? AND type = 'headline' AND tick = ?"
   ).all(corp.season_id, season.tick_count).map(e => e.narrative);
+
+  const pendingAlliances = db.prepare(`
+    SELECT a.corp_a_id AS proposing_corp_id, c.name AS proposing_corp_name
+    FROM alliances a
+    JOIN corporations c ON c.id = a.corp_a_id
+    WHERE a.corp_b_id = ? AND a.formed_tick IS NULL AND a.broken_tick IS NULL
+  `).all(corp.id);
 
   const activeLaw = db.prepare(
     'SELECT name, effect FROM laws WHERE season_id = ? AND is_active = 1'
@@ -60,7 +68,7 @@ function buildBriefingPayload(db, corp, season) {
     reputation: corp.reputation,
     reputationLabel,
     alliances,
-    pendingAlliances: [], // TODO Plan 2
+    pendingAlliances,
     activeLaw: activeLaw || null,
     availableActions: [],
     narrative: null, // TODO Plan 4
@@ -81,7 +89,8 @@ function runTick(db, seasonId) {
   // Step 2: Resource generation (includes Workforce enforcement)
   generateResources(conn, seasonId, newTick);
 
-  // Steps 3-7: Action resolution — Plan 2, Gemini NL parsing — Plan 4
+  // Steps 3-7: Action resolution — resolve actions submitted during the tick that just ended
+  resolveActions(conn, seasonId, newTick - 1);
 
   // Step 8: Store briefings for all corps
   const corps = conn.prepare('SELECT * FROM corporations WHERE season_id = ?').all(seasonId);

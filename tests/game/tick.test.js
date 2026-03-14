@@ -64,3 +64,55 @@ test('runTick overwrites briefing on second run (UNIQUE constraint)', () => {
   const briefings = db.prepare('SELECT * FROM briefings WHERE corp_id = ?').all(corpId);
   expect(briefings).toHaveLength(2); // tick 1 and tick 2
 });
+
+test('runTick calls resolveActions — pending action gets resolved', () => {
+  // Give corp enough resources for a claim (3E, 5C)
+  db.prepare('UPDATE corporations SET energy = 10, credits = 10 WHERE id = ?').run(corpId);
+
+  // Find an unclaimed district adjacent to the corp's owned district
+  const ownedDistrict = db.prepare(
+    'SELECT * FROM districts WHERE owner_id = ? LIMIT 1'
+  ).get(corpId);
+  const adjacentIds = JSON.parse(ownedDistrict.adjacent_ids);
+  const targetDistrictId = adjacentIds[0];
+
+  // Submit a pending action for tick 0 (will be resolved when tick becomes 1)
+  const actionId = uuidv4();
+  const parsedActions = JSON.stringify({
+    primaryAction: { type: 'claim', targetDistrictId },
+    freeActions: [],
+  });
+  db.prepare(`
+    INSERT INTO pending_actions (id, corp_id, tick, parsed_actions, status)
+    VALUES (?, ?, 0, ?, 'pending')
+  `).run(actionId, corpId, parsedActions);
+
+  // runTick increments to tick 1, then resolves actions for tick 0
+  runTick(db, seasonId);
+
+  const action = db.prepare('SELECT * FROM pending_actions WHERE id = ?').get(actionId);
+  expect(action.status).toBe('resolved');
+});
+
+test('buildBriefingPayload includes pendingAlliances', () => {
+  // Create a second corp that will propose an alliance to corpId
+  const proposerCorpId = uuidv4();
+  db.prepare(`INSERT INTO corporations (id, season_id, name, api_key) VALUES (?, ?, 'ProposerCorp', ?)`)
+    .run(proposerCorpId, seasonId, uuidv4());
+
+  // Insert a pending alliance: corp_a = proposer, corp_b = corpId
+  // formed_tick IS NULL and broken_tick IS NULL = pending
+  db.prepare(`
+    INSERT INTO alliances (id, corp_a_id, corp_b_id, proposed_tick)
+    VALUES (?, ?, ?, 0)
+  `).run(uuidv4(), proposerCorpId, corpId);
+
+  runTick(db, seasonId);
+
+  const briefing = db.prepare('SELECT * FROM briefings WHERE corp_id = ?').get(corpId);
+  const payload = JSON.parse(briefing.payload);
+  expect(payload.pendingAlliances).toBeInstanceOf(Array);
+  expect(payload.pendingAlliances).toHaveLength(1);
+  expect(payload.pendingAlliances[0].proposing_corp_id).toBe(proposerCorpId);
+  expect(payload.pendingAlliances[0].proposing_corp_name).toBe('ProposerCorp');
+});
