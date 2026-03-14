@@ -68,9 +68,11 @@ function createLaws(db, seasonId) {
   const stmt = db.prepare(
     'INSERT OR IGNORE INTO laws (id, season_id, name, effect) VALUES (?, ?, ?, ?)'
   );
-  for (const law of LAWS) {
-    stmt.run(crypto.randomUUID(), seasonId, law.name, law.effect);
-  }
+  db.transaction(() => {
+    for (const law of LAWS) {
+      stmt.run(crypto.randomUUID(), seasonId, law.name, law.effect);
+    }
+  })();
 }
 
 function createDistrictMap(db, seasonId) {

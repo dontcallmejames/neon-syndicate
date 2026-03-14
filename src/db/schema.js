@@ -100,7 +100,8 @@ function initDb(db) {
       phase_id TEXT NOT NULL,
       corp_id TEXT NOT NULL,
       law_id TEXT NOT NULL,
-      credits INTEGER NOT NULL
+      credits INTEGER NOT NULL,
+      FOREIGN KEY (phase_id) REFERENCES phases(id)
     );
 
     CREATE TABLE IF NOT EXISTS pending_actions (

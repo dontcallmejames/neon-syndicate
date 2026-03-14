@@ -77,6 +77,9 @@ test('embargoes table exists with required columns', () => {
 test('lobby_votes has law_id column', () => {
   const db = new Database(':memory:');
   initDb(db);
+  // Need a season and phase to satisfy the phase_id FK
+  db.prepare("INSERT INTO seasons (id, tick_interval_ms, season_length) VALUES ('s1', 300000, 200)").run();
+  db.prepare("INSERT INTO phases (id, season_id, phase_number, start_tick) VALUES ('p1', 's1', 1, 1)").run();
   db.prepare(
     "INSERT INTO lobby_votes (id, phase_id, corp_id, law_id, credits) VALUES ('v1','p1','c1','l1',10)"
   ).run();
