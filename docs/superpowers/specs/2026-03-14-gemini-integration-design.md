@@ -16,7 +16,7 @@ Integrate Google Gemini into the Neon Syndicate tick loop for three purposes: pa
 |---|---|
 | Model | `gemini-2.0-flash` (configurable via `GEMINI_MODEL` env var) |
 | Code structure | Single `src/game/gemini.js` module, three exported functions |
-| NL parsing timing | Batch during tick cycle (step 3.5), not at submission time |
+| NL parsing timing | Batch during tick cycle (step 3), not at submission time |
 | Failure behavior | Graceful degrade — game never stalls on Gemini errors |
 | Fallback narrative | Template-generated from briefing payload — never null |
 | Fallback headline | Single generic line — never empty |
@@ -26,24 +26,26 @@ Integrate Google Gemini into the Neon Syndicate tick loop for three purposes: pa
 
 ## 1. The `src/game/gemini.js` Module
 
-One file, initialized once with `process.env.GEMINI_API_KEY` and `process.env.GEMINI_MODEL` (default: `gemini-2.0-flash`). Uses the `@google/generative-ai` npm package.
+One file, initialized with `process.env.GEMINI_API_KEY` and `process.env.GEMINI_MODEL` (default: `gemini-2.0-flash`). Uses the `@google/generative-ai` npm package.
 
-If `GEMINI_API_KEY` is absent or empty, each function logs a warning and returns a safe no-op result:
-- `parseNLAction` → `null` (action treated as unsubmitted)
-- `generateNarratives` → `{}` (all corps get fallback narrative)
-- `generateHeadlines` → `[]` (generic fallback headline used)
+If `GEMINI_API_KEY` is absent or empty at module load time, each async function logs a warning and returns a safe no-op result:
+- `parseNLAction` → `null`
+- `generateNarratives` → `{}`
+- `generateHeadlines` → `[]`
 
-This allows the game to run in development without a Gemini API key.
+The `tick.js` integration layer is responsible for translating these no-op returns into the appropriate DB writes (e.g., `status = 'rejected'` for null parse results). `parseNLAction` never writes to the database itself — it is a pure async function that returns structured data or null.
 
 **Exports:**
 ```js
-parseNLAction(rawResponse, availableActions, corp)  → Promise<parsedActions | null>
-generateNarratives(briefingPayloads)                → Promise<{ [corpId]: string }>
-generateHeadlines(events, tick)                     → Promise<string[]>
-buildFallbackNarrative(corp, payload)               → string  // synchronous, no Gemini
+parseNLAction(rawResponse, availableActions, corp)         → Promise<parsedActions | null>
+generateNarratives(corpPayloadPairs)                       → Promise<{ [corpId]: string }>
+generateHeadlines(events, tick)                            → Promise<string[]>
+buildFallbackNarrative(corp, payload)                      → string  // synchronous, no Gemini
 ```
 
-`buildFallbackNarrative` is exported for use in tests and anywhere a guaranteed non-null narrative is needed.
+Where `corpPayloadPairs` is `Array<{ corp, payload }>` — each entry carries the full corporation row and its briefing payload together so corps can be keyed by `corp.id` in the response map.
+
+`buildFallbackNarrative` is exported for use in `tick.js`, `briefing.js`, and tests.
 
 ---
 
@@ -51,29 +53,41 @@ buildFallbackNarrative(corp, payload)               → string  // synchronous, 
 
 ### When it runs
 
-In `runTick` (`src/game/tick.js`), between `generateResources` (step 2) and `resolveActions` (step 3). Specifically:
+In `runTick` (`src/game/tick.js`), between `generateResources` (step 2) and `resolveActions` (step 4). Specifically, it processes actions for `tick = newTick - 1` — the same tick that `resolveActions(conn, seasonId, newTick - 1)` will resolve. Actions are submitted by agents during tick N and resolved when `runTick` fires for tick N+1, so the fetch predicate is:
 
-1. Fetch all `pending_actions` rows for the current tick where `raw_response IS NOT NULL AND parsed_actions IS NULL AND status = 'pending'`
-2. For each row, call `parseNLAction` with the raw text, the available actions list, and the corp's current state
-3. On success: write the returned JSON to `parsed_actions` in the DB
-4. On failure: set `status = 'rejected'` — same outcome as a malformed structured submission
+```sql
+SELECT pa.*, c.reputation FROM pending_actions pa
+JOIN corporations c ON c.id = pa.corp_id
+WHERE pa.tick = ? AND pa.raw_response IS NOT NULL
+  AND pa.parsed_actions IS NULL AND pa.status = 'pending'
+```
+
+bound to `newTick - 1`.
+
+### Available actions list
+
+The `availableActions` argument passed to `parseNLAction` is built by calling `buildAvailableActions(isPariah)` (imported from `src/api/routes/briefing.js`, which must export it). `isPariah` is `corp.reputation < 15`. This ensures Gemini only knows about actions the corp can actually submit.
 
 ### The prompt
 
-The prompt gives Gemini:
-- The full available actions schema (types, costs, required fields)
-- The corp's current resource balances (so Gemini doesn't hallucinate impossible actions)
+The prompt provides Gemini with:
+- The corp's current resource balances
+- The full available actions list (types, costs, required fields)
 - The raw natural language string from the agent
 
-Expected output: `{ primaryAction: { type, ...fields }, freeActions: [...] }` matching the structure `resolveActions` expects. Gemini is instructed to return only valid JSON with no markdown wrapping.
+Gemini is instructed to return only valid JSON — no markdown, no explanation — matching:
+```json
+{ "primaryAction": { "type": "...", ...fields }, "freeActions": [...] }
+```
 
 ### Failure modes
 
-| Failure | Behavior |
-|---|---|
-| Gemini API error / timeout | `status = 'rejected'`, corp skips this tick's action |
-| Gemini returns malformed JSON | Same — `status = 'rejected'` |
-| `GEMINI_API_KEY` absent | Same — `status = 'rejected'` (with warning log) |
+| Failure | `parseNLAction` return | `tick.js` DB write |
+|---|---|---|
+| Gemini API error / timeout | `null` | `status = 'rejected'` |
+| Gemini returns non-JSON | `null` | `status = 'rejected'` |
+| `GEMINI_API_KEY` absent | `null` (+ warning log) | `status = 'rejected'` |
+| Success | `{ primaryAction, freeActions }` | `parsed_actions = JSON.stringify(result)` |
 
 No retries. The tick cannot stall waiting for Gemini.
 
@@ -87,7 +101,7 @@ In `runTick`, after all corps' briefing payloads are built (the `buildBriefingPa
 
 ### The call
 
-One Gemini call for all corps — `generateNarratives(briefingPayloads)` receives an array of payloads. The prompt instructs Gemini to return a JSON object:
+One Gemini call for all corps — `generateNarratives(corpPayloadPairs)` receives an array of `{ corp, payload }` objects. The prompt instructs Gemini to return a JSON object keyed by `corp.id`:
 
 ```json
 {
@@ -98,10 +112,19 @@ One Gemini call for all corps — `generateNarratives(briefingPayloads)` receive
 
 The prompt instructs Gemini to write from the corp's perspective, reference specific events (district changes, messages received, laws enacted), and maintain a cyberpunk tabloid tone — dramatic, terse, present tense.
 
-tick.js merges the returned narratives into each payload before storage:
+The response JSON is parsed per-corp key individually. If the overall response is valid JSON, each corp gets its value or falls back independently:
+
 ```js
-payload.narrative = narratives[corp.id] || buildFallbackNarrative(corp, payload);
+payload.narrative = narratives[corp.id] ?? buildFallbackNarrative(corp, payload);
 ```
+
+### Failure modes
+
+| Failure | Behavior |
+|---|---|
+| Gemini API error / timeout | All corps receive `buildFallbackNarrative` |
+| Gemini returns non-JSON | All corps receive `buildFallbackNarrative` |
+| Gemini omits a specific corp's key | That corp receives `buildFallbackNarrative`; others use their Gemini narrative |
 
 ### Fallback narrative
 
@@ -111,15 +134,7 @@ payload.narrative = narratives[corp.id] || buildFallbackNarrative(corp, payload)
 Tick {N}. {CorpName} controls {X} district(s). Credits: {C} | Energy: {E} | Reputation: {label}. {eventSummary}
 ```
 
-Where `eventSummary` is either "No significant events this cycle." or a count of events from `payload.events`. Always a non-empty string. No Gemini required.
-
-### Failure modes
-
-| Failure | Behavior |
-|---|---|
-| Gemini API error / timeout | All corps receive fallback narrative |
-| Gemini returns malformed JSON | All corps receive fallback narrative |
-| Gemini omits a corp from the response | That corp receives fallback narrative |
+Where `eventSummary` is either `"No significant events this cycle."` or `"{N} events recorded."` based on `payload.events.length`. Always a non-empty string. No Gemini required.
 
 ---
 
@@ -127,13 +142,13 @@ Where `eventSummary` is either "No significant events this cycle." or a count of
 
 ### When it runs
 
-In `runTick`, after briefings are stored and before `is_ticking` is cleared. This is the last Gemini call of the tick.
+In `runTick`, after briefings are stored and before `is_ticking` is cleared. Events are queried from the `events` table where `tick = newTick - 1` — matching what `resolveActions(conn, seasonId, newTick - 1)` writes. (Events are tagged with the tick they were resolved for, which is `newTick - 1`.)
 
 ### The call
 
-`generateHeadlines(events, tick)` receives the events written during this tick (from the `events` table where `tick = newTick`). The prompt instructs Gemini to write 3–5 cyberpunk tabloid headlines based on those events — naming districts and corps involved but not revealing resource amounts or mechanic details (e.g., energy spent).
+`generateHeadlines(events, tick)` receives the events array. The prompt instructs Gemini to write 3–5 cyberpunk tabloid headlines based on those events — naming districts and corps involved but not revealing resource amounts or mechanic details. If no events occurred, the prompt requests generic city-news headlines.
 
-The returned array of strings is stored as a single event row:
+The returned array of strings is stored via `writeEvent`:
 ```js
 writeEvent(db, {
   seasonId,
@@ -143,56 +158,68 @@ writeEvent(db, {
 });
 ```
 
-`briefing.js` already queries `events WHERE type = 'headline' AND tick = ?` — no schema changes needed.
+Note: the headline event is tagged with `tick = newTick` (the current tick), not `newTick - 1`. This matches the existing briefing query: `events WHERE type = 'headline' AND tick = ?` bound to `currentTick`. No schema changes needed.
 
 ### Fallback headline
 
-If Gemini fails, a single fallback string is stored:
+If Gemini fails or returns an empty array:
 ```
 CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE
 ```
 
-Always non-empty.
+Stored as a one-element array: `['CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE']`.
 
 ---
 
 ## 5. Tick Cycle Integration
+
+`runTick` is made `async`. To prevent overlapping ticks when a Gemini call takes longer than the 5-second poll interval, the `setInterval` callback in `startTickLoop` is converted to an `async` function that `await`s `runTick`. The existing `is_ticking` flag provides a secondary guard — if `runTick` is somehow called while a tick is in progress, the `is_ticking = 1` check at the top of `runTick` prevents double-execution.
 
 Updated `runTick` order:
 
 ```
 1.  Increment tick; set is_ticking = 1
 2.  generateResources(conn, seasonId, newTick)
-3.  [NEW] Parse NL submissions: fetch raw_response rows, call parseNLAction per row, write parsed_actions
+3.  [NEW] Parse NL submissions: fetch raw_response rows for tick = newTick - 1,
+          call parseNLAction per row, write parsed_actions or status = 'rejected'
 4.  resolveActions(conn, seasonId, newTick - 1)
 5.  Build briefing payloads for all corps (buildBriefingPayload loop)
-6.  [NEW] generateNarratives(payloads) → merge narratives into payloads
+6.  [NEW] generateNarratives(corpPayloadPairs) → merge narratives into payloads
+          (fallback via buildFallbackNarrative for any missing corp or on error)
 7.  INSERT OR REPLACE briefings into DB
-8.  [NEW] generateHeadlines(events, newTick) → writeEvent(type='headline')
+8.  [NEW] generateHeadlines(events for newTick - 1, newTick)
+          → writeEvent(type='headline', tick=newTick)
 9.  Clear is_ticking = 0
 ```
 
-Steps 6 and 8 are the only async additions. The tick loop must be made `async` to `await` these calls.
+---
+
+## 6. Live Briefing Path (`src/api/routes/briefing.js`)
+
+The live briefing path (used when no stored briefing matches the current tick) currently sets `narrative: null`. In Plan 3, this is updated to call `buildFallbackNarrative(corp, payload)` synchronously instead — ensuring the `narrative` field is never null in any briefing response.
+
+`buildAvailableActions` is also extracted from `briefing.js` as a named export so `tick.js` can import it for the NL parsing step.
 
 ---
 
-## 6. Configuration
+## 7. Configuration
 
 New environment variables added to `.env.example`:
 
 ```
-GEMINI_API_KEY=           # required for Gemini features; game runs without it (degraded)
-GEMINI_MODEL=gemini-2.0-flash  # optional override
+GEMINI_API_KEY=                    # required for Gemini features; game runs without it (degraded)
+GEMINI_MODEL=gemini-2.0-flash      # optional override
 ```
 
 ---
 
-## 7. Files Changed
+## 8. Files Changed
 
 | File | Change |
 |---|---|
-| `src/game/gemini.js` | **Create** — three exported functions + fallback helpers |
-| `src/game/tick.js` | **Modify** — make `runTick` async; add NL parsing step; add narrative merge; add headline step |
+| `src/game/gemini.js` | **Create** — three exported async functions + `buildFallbackNarrative` |
+| `src/game/tick.js` | **Modify** — make `runTick` async; update `startTickLoop` to await; add NL parsing step; add narrative merge; add headline step |
+| `src/api/routes/briefing.js` | **Modify** — export `buildAvailableActions`; call `buildFallbackNarrative` in live path instead of `null` |
 | `package.json` | **Modify** — add `@google/generative-ai` dependency |
 | `.env.example` | **Modify** — add `GEMINI_API_KEY` and `GEMINI_MODEL` |
 | `tests/game/gemini.test.js` | **Create** — unit tests with mocked Gemini client |
@@ -200,20 +227,22 @@ GEMINI_MODEL=gemini-2.0-flash  # optional override
 
 ---
 
-## 8. Testing Strategy
+## 9. Testing Strategy
 
 `@google/generative-ai` is mocked at the module level using Jest's `jest.mock()`. Tests do not require a real API key.
 
 **`tests/game/gemini.test.js` covers:**
-- `parseNLAction`: mock returns valid JSON → verify returned structure; mock returns garbage → verify null; mock throws → verify null
-- `generateNarratives`: mock returns valid keyed object → verify merge; mock throws → verify all corps get fallback
-- `generateHeadlines`: mock returns array → verify returned; mock throws → verify fallback string returned
-- `buildFallbackNarrative`: no mock needed — pure function; verify output contains corp name, tick, resource summary
+- `parseNLAction`: mock returns valid JSON → verify returned structure; mock returns non-JSON → verify null; mock throws → verify null
+- `parseNLAction` with no API key: unset `process.env.GEMINI_API_KEY` before requiring module → verify null returned and warning logged
+- `generateNarratives`: mock returns valid keyed object → verify returned map; mock returns partial object (one corp missing) → verify missing corp gets fallback, others get Gemini value; mock throws → verify all corps get fallback
+- `generateHeadlines`: mock returns array → verify returned; mock throws → verify fallback string in returned array
+- `buildFallbackNarrative`: no mock needed — pure function; verify output contains corp name, tick number, resource summary, and is non-empty for any valid payload
 
 **`tests/game/tick.test.js` additions:**
-- Submit a `raw_response` NL action, run `runTick`, verify `parsed_actions` was written and the action resolved correctly
-- Verify a `headline` event row exists after `runTick`
-- Verify briefing payload `narrative` is non-null after `runTick`
+- Submit a `raw_response` NL action (with `parsed_actions = null`), mock `parseNLAction` to return a valid claim action, run `runTick`, verify `parsed_actions` was written and the action resolved (district ownership changed)
+- Submit a `raw_response`, mock `parseNLAction` to return `null`, run `runTick`, verify `status = 'rejected'`
+- Run `runTick`, verify a `headline` event row with `tick = newTick` exists in the events table
+- Run `runTick`, verify briefing payload `narrative` is a non-empty string (not null)
 
 ---
 
@@ -223,3 +252,4 @@ GEMINI_MODEL=gemini-2.0-flash  # optional override
 - Per-agent narrative tone customization
 - Caching Gemini responses across ticks
 - Gemini for action validation (validation stays in `validate.js`)
+- Retry logic on Gemini failures
