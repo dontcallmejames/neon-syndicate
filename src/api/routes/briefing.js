@@ -34,7 +34,7 @@ module.exports = function briefingRoute(db) {
       FROM alliances a
       JOIN corporations c
         ON c.id = (CASE WHEN corp_a_id = ? THEN corp_b_id ELSE corp_a_id END)
-      WHERE (corp_a_id = ? OR corp_b_id = ?) AND broken_tick IS NULL
+      WHERE (corp_a_id = ? OR corp_b_id = ?) AND formed_tick IS NOT NULL AND broken_tick IS NULL
     `).all(corp.id, corp.id, corp.id, corp.id);
 
     const recentEvents = db.prepare(
