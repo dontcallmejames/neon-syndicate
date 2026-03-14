@@ -141,3 +141,75 @@ test('lobby blocked for Pariah', () => {
   expect(result.valid).toBe(false);
   expect(result.reason).toMatch(/pariah/i);
 });
+
+test('fortify_discount law halves fortify credit cost', () => {
+  const corp = makeCorp({ energy: 10, credits: 3 }); // fortify normally costs 8C; with discount = 4C; corp has only 3 → fails
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'fortify_discount'").run(seasonId);
+  const target = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  const withoutLaw = validateActions(db, corp, { primaryAction: { type: 'fortify', targetDistrictId: target.id }, freeActions: [] }, 1);
+  // Without law: needs 8C, corp has 3 → invalid
+  expect(withoutLaw.valid).toBe(false);
+  // Now with law active (already set above): needs floor(8*0.5)=4C, corp has 3 → still invalid
+  // Re-test: give corp 4C
+  db.prepare('UPDATE corporations SET credits = 4 WHERE id = ?').run(corp.id);
+  const updated = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corp.id);
+  const withLaw = validateActions(db, updated, { primaryAction: { type: 'fortify', targetDistrictId: target.id }, freeActions: [] }, 1);
+  expect(withLaw.valid).toBe(true); // floor(8*0.5)=4C, corp has 4 → valid
+});
+
+test('security_lockdown doubles sabotage energy cost', () => {
+  const corp = makeCorp({ energy: 7, credits: 20, influence: 10 }); // sabotage normally costs 4E; lockdown → 8E
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'security_lockdown'").run(seasonId);
+  const target = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  const result = validateActions(db, corp, { primaryAction: { type: 'sabotage', targetDistrictId: target.id }, freeActions: [] }, 1);
+  expect(result.valid).toBe(false); // need 8E, have 7
+  expect(result.reason).toMatch(/energy/i);
+});
+
+test('crackdown doubles sabotage influence cost', () => {
+  const corp = makeCorp({ energy: 10, credits: 20, influence: 8 }); // sabotage normally costs 5I; crackdown → 10I
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'crackdown'").run(seasonId);
+  const target = db.prepare("SELECT id FROM districts WHERE season_id = ? AND owner_id IS NULL LIMIT 1").get(seasonId);
+  const result = validateActions(db, corp, { primaryAction: { type: 'sabotage', targetDistrictId: target.id }, freeActions: [] }, 1);
+  expect(result.valid).toBe(false); // need 10I, have 8
+  expect(result.reason).toMatch(/influence/i);
+});
+
+test('labor_zone_attack_cost adds 5 energy when attacking labor_zone', () => {
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'labor_zone_attack_cost'").run(seasonId);
+  const lz = db.prepare("SELECT id FROM districts WHERE season_id = ? AND type = 'labor_zone' LIMIT 1").get(seasonId);
+  const corp = makeCorp({ energy: 9, credits: 20 }); // attack with energySpent=5 + 5 law penalty = 10E total; corp has 9 → fail
+  const result = validateActions(db, corp, { primaryAction: { type: 'attack', targetDistrictId: lz.id, energySpent: 5 }, freeActions: [] }, 1);
+  expect(result.valid).toBe(false); // need 10E, have 9
+});
+
+test('lobby rejected when lawId does not exist in DB', () => {
+  const corp = makeCorp({ reputation: 50, credits: 50 });
+  const result = validateActions(db, corp, {
+    primaryAction: null,
+    freeActions: [{ type: 'lobby', lawId: 'nonexistent-law-id', credits: 10 }],
+  }, 1);
+  expect(result.valid).toBe(false);
+  expect(result.reason).toMatch(/not found/i);
+});
+
+test('lobby rejected when credits below minimum (10)', () => {
+  const corp = makeCorp({ reputation: 50, credits: 50 });
+  const lawId = db.prepare("SELECT id FROM laws WHERE season_id = ? LIMIT 1").get(seasonId).id;
+  const result = validateActions(db, corp, {
+    primaryAction: null,
+    freeActions: [{ type: 'lobby', lawId, credits: 8 }],
+  }, 1);
+  expect(result.valid).toBe(false);
+  expect(result.reason).toMatch(/credits/i);
+});
+
+test('Trusted corp lobby minimum is 8 credits', () => {
+  const corp = makeCorp({ reputation: 80, credits: 50 });
+  const lawId = db.prepare("SELECT id FROM laws WHERE season_id = ? LIMIT 1").get(seasonId).id;
+  const result = validateActions(db, corp, {
+    primaryAction: null,
+    freeActions: [{ type: 'lobby', lawId, credits: 8 }],
+  }, 1);
+  expect(result.valid).toBe(true); // Trusted: min is 8, not 10
+});
