@@ -1,12 +1,14 @@
 // src/api/routes/admin/state.js
 module.exports = function adminStateHandler(db) {
   return (req, res) => {
+    const SEASON_COLS = 'id, status, tick_count, season_length, tick_interval_ms, is_ticking, scoring_weights, starting_resources, created_at';
+
     // Find most recent non-ended season; fall back to any season
     let season = db.prepare(
-      "SELECT * FROM seasons WHERE status != 'ended' ORDER BY created_at DESC LIMIT 1"
+      `SELECT ${SEASON_COLS} FROM seasons WHERE status != 'ended' ORDER BY created_at DESC LIMIT 1`
     ).get();
     if (!season) {
-      season = db.prepare('SELECT * FROM seasons ORDER BY created_at DESC LIMIT 1').get() || null;
+      season = db.prepare(`SELECT ${SEASON_COLS} FROM seasons ORDER BY created_at DESC LIMIT 1`).get() || null;
     }
 
     if (!season) {
@@ -19,13 +21,14 @@ module.exports = function adminStateHandler(db) {
       tick_count: season.tick_count,
       season_length: season.season_length,
       tick_interval_ms: season.tick_interval_ms,
-      is_ticking: season.is_ticking,
+      is_ticking: season.is_ticking === 1,
       scoring_weights: JSON.parse(season.scoring_weights || '{}'),
       starting_resources: JSON.parse(season.starting_resources || '{}'),
     };
 
     const corps = db.prepare(`
-      SELECT c.*, COUNT(d.id) AS district_count
+      SELECT c.id, c.name, c.credits, c.energy, c.workforce, c.intelligence,
+             c.influence, c.political_power, c.reputation, COUNT(d.id) AS district_count
       FROM corporations c
       LEFT JOIN districts d ON d.owner_id = c.id AND d.season_id = c.season_id
       WHERE c.season_id = ?
@@ -42,6 +45,7 @@ module.exports = function adminStateHandler(db) {
       SELECT d.id, d.name, d.type, d.owner_id AS ownerId, c.name AS ownerName
       FROM districts d LEFT JOIN corporations c ON c.id = d.owner_id
       WHERE d.season_id = ?
+      ORDER BY d.rowid ASC
     `).all(season.id);
 
     const activeLaw = db.prepare(
