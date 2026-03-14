@@ -107,3 +107,39 @@ test('no workforce penalty when workforce >= district count', () => {
   const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corpId);
   expect(corp.credits).toBe(8); // 2 × 4, no penalty
 });
+
+test('sabotaged district produces at 50%', () => {
+  const corpId = makeCorp({ credits: 0 });
+  assignDistrict(corpId, 'financial_hub');
+  // sabotaged_until = 3 means sabotaged through tick 2 (condition: sabotaged_until > tick)
+  db.prepare('UPDATE districts SET sabotaged_until = 3 WHERE owner_id = ?').run(corpId);
+  generateResources(db, seasonId, 2);
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corpId);
+  expect(corp.credits).toBe(2); // financial_hub +4 at 50% = 2
+});
+
+test('sabotage expires when sabotaged_until <= tick', () => {
+  const corpId = makeCorp({ credits: 0 });
+  assignDistrict(corpId, 'financial_hub');
+  db.prepare('UPDATE districts SET sabotaged_until = 2 WHERE owner_id = ?').run(corpId);
+  generateResources(db, seasonId, 2); // tick 2: 2 > 2 is false → full production
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corpId);
+  expect(corp.credits).toBe(4); // full production
+});
+
+test('Data Sovereignty Act gives Data Centers +20% (floored on total)', () => {
+  const corpId = makeCorp({ intelligence: 0, workforce: 10 });
+  // Assign all 4 data_centers in the map
+  const dcs = db.prepare(
+    "SELECT id FROM districts WHERE season_id = ? AND type = 'data_center'"
+  ).all(seasonId);
+  for (const dc of dcs) {
+    db.prepare('UPDATE districts SET owner_id = ? WHERE id = ?').run(corpId, dc.id);
+  }
+  db.prepare("UPDATE laws SET is_active = 1 WHERE season_id = ? AND effect = 'data_center_bonus'").run(seasonId);
+  generateResources(db, seasonId, 1);
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corpId);
+  // 4 × 3 × 1.2 = 14.4, accumulated as float, floor(14.4) = 14
+  // Without DSA: 4 × 3 = 12
+  expect(corp.intelligence).toBe(14);
+});

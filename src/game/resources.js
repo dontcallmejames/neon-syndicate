@@ -12,58 +12,64 @@ const PRODUCTION = {
 
 const RESOURCE_KEYS = ['credits', 'energy', 'workforce', 'intelligence', 'influence', 'political_power'];
 
-function generateResources(db, seasonId) {
+function generateResources(db, seasonId, tick) {
   const conn = db || getDb();
+  const activeLaw = conn.prepare(
+    "SELECT effect FROM laws WHERE season_id = ? AND is_active = 1"
+  ).get(seasonId);
+  const lawEffect = activeLaw ? activeLaw.effect : null;
   const corps = conn.prepare('SELECT * FROM corporations WHERE season_id = ?').all(seasonId);
 
   for (const corp of corps) {
-    // Districts ordered by rowid (insertion order = acquisition order)
     const districts = conn.prepare(
       'SELECT * FROM districts WHERE season_id = ? AND owner_id = ? ORDER BY rowid ASC'
     ).all(seasonId, corp.id);
 
-    // First pass: calculate post-generation workforce to determine enforcement threshold
+    // First pass: compute post-generation workforce to determine enforcement threshold
     let workforceDelta = 0;
     for (const district of districts) {
       workforceDelta += (PRODUCTION[district.type] || {}).workforce || 0;
     }
     const postGenWorkforce = corp.workforce + workforceDelta;
-    // Districts beyond postGenWorkforce threshold (most recently acquired) produce at 50%
     const fullCount = Math.min(postGenWorkforce, districts.length);
 
-    // Second pass: calculate all resource deltas with enforcement applied
+    // Second pass: accumulate resource deltas as floats; floor at DB write
     const delta = Object.fromEntries([...RESOURCE_KEYS, 'reputation'].map(k => [k, 0]));
 
     districts.forEach((district, index) => {
       const production = PRODUCTION[district.type] || {};
-      const multiplier = index < fullCount ? 1 : 0.5;
+      const workforceMultiplier = index < fullCount ? 1 : 0.5;
+      const isSabotaged = tick != null && district.sabotaged_until > tick;
+      const sabotageMultiplier = isSabotaged ? 0.5 : 1;
 
       for (const [resource, amount] of Object.entries(production)) {
         if (resource === 'reputation') {
-          // Reputation changes are never affected by workforce enforcement
-          delta.reputation += amount;
+          delta.reputation += amount; // integer; exempt from sabotage + workforce
         } else {
-          delta[resource] = (delta[resource] || 0) + Math.floor(amount * multiplier);
+          let effectiveAmount = amount;
+          if (district.type === 'data_center' && resource === 'intelligence' &&
+              lawEffect === 'data_center_bonus') {
+            effectiveAmount *= 1.2;
+          }
+          delta[resource] += effectiveAmount * workforceMultiplier * sabotageMultiplier;
         }
       }
     });
 
-    // Apply delta; clamp reputation to 0–100
     const newRep = Math.max(0, Math.min(100, corp.reputation + delta.reputation));
-
     conn.prepare(`
       UPDATE corporations SET
-        credits          = credits + ?,
-        energy           = energy + ?,
-        workforce        = workforce + ?,
-        intelligence     = intelligence + ?,
-        influence        = influence + ?,
-        political_power  = political_power + ?,
-        reputation       = ?
+        credits         = credits + ?,
+        energy          = energy + ?,
+        workforce       = workforce + ?,
+        intelligence    = intelligence + ?,
+        influence       = influence + ?,
+        political_power = political_power + ?,
+        reputation      = ?
       WHERE id = ?
     `).run(
-      delta.credits, delta.energy, delta.workforce,
-      delta.intelligence, delta.influence, delta.political_power,
+      Math.floor(delta.credits), Math.floor(delta.energy), Math.floor(delta.workforce),
+      Math.floor(delta.intelligence), Math.floor(delta.influence), Math.floor(delta.political_power),
       newRep, corp.id
     );
   }

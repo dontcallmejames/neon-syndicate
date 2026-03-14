@@ -79,7 +79,7 @@ function runTick(db, seasonId) {
   const updatedSeason = { ...season, tick_count: newTick };
 
   // Step 2: Resource generation (includes Workforce enforcement)
-  generateResources(conn, seasonId);
+  generateResources(conn, seasonId, newTick);
 
   // Steps 3-7: Action resolution — Plan 2, Gemini NL parsing — Plan 4
 
