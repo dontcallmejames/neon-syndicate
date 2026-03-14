@@ -68,6 +68,24 @@ test('GET /briefing/:agentId returns stored briefing when available', async () =
   expect(res.body.resources.credits).toBe(99);
 });
 
+test('buildAvailableActions is exported from briefing.js', () => {
+  const { buildAvailableActions } = require('../../src/api/routes/briefing');
+  expect(typeof buildAvailableActions).toBe('function');
+  const actions = buildAvailableActions(false);
+  expect(Array.isArray(actions)).toBe(true);
+  expect(actions.length).toBeGreaterThan(0);
+});
+
+test('GET /briefing/:agentId live path returns narrative as non-null string', async () => {
+  const res = await request(app)
+    .get(`/briefing/${corpId}`)
+    .set('Authorization', `Bearer ${apiKey}`);
+
+  expect(res.status).toBe(200);
+  expect(typeof res.body.narrative).toBe('string');
+  expect(res.body.narrative.length).toBeGreaterThan(0);
+});
+
 test('GET /briefing/:agentId returns pendingAlliances', async () => {
   // Create a proposing corp
   const proposerCorpId = uuidv4();

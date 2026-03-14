@@ -1,7 +1,8 @@
 // src/api/routes/briefing.js
 const { calculateValuation } = require('../../game/valuation');
+const { buildFallbackNarrative } = require('../../game/gemini');
 
-module.exports = function briefingRoute(db) {
+function briefingRoute(db) {
   return (req, res) => {
     const { agentId } = req.params;
     if (req.corp.id !== agentId) {
@@ -90,12 +91,15 @@ module.exports = function briefingRoute(db) {
       pendingAlliances,
       activeLaw: activeLaw || null,
       availableActions: buildAvailableActions(isPariah),
-      narrative: null, // TODO Plan 4: Gemini integration
     };
+    payload.narrative = buildFallbackNarrative(corp, payload);
 
     return res.json(payload);
   };
 };
+
+module.exports = briefingRoute;
+module.exports.buildAvailableActions = buildAvailableActions;
 
 function buildAvailableActions(isPariah) {
   const actions = [
