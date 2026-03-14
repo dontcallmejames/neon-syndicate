@@ -9,6 +9,8 @@ const briefingRoute = require('./routes/briefing');
 const actionRoute = require('./routes/action');
 const worldRoute = require('./routes/world');
 const { createWsServer } = require('./ws');
+const adminAuth = require('./middleware/adminAuth');
+const adminState = require('./routes/admin/state');
 
 function createServer(db) {
   const conn = db || getDb();
@@ -21,6 +23,10 @@ function createServer(db) {
   app.post('/action/:agentId', requireAuth(conn), actionRoute(conn));
   app.get('/world', worldRoute(conn));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+  // Admin routes — protected by Bearer token, before static so /admin/* can't be shadowed
+  app.use('/admin', adminAuth);
+  app.get('/admin/state', adminState(conn));
 
   // Static file serving after routes
   // public/ created in Task 7 — no-op until then
