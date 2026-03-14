@@ -127,6 +127,15 @@ test('sabotage expires when sabotaged_until <= tick', () => {
   expect(corp.credits).toBe(4); // full production
 });
 
+test('generateResources without tick ignores sabotaged_until (legacy call path)', () => {
+  const corpId = makeCorp({ credits: 0 });
+  assignDistrict(corpId, 'financial_hub');
+  db.prepare('UPDATE districts SET sabotaged_until = 999 WHERE owner_id = ?').run(corpId);
+  generateResources(db, seasonId); // no tick — sabotage check skipped
+  const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corpId);
+  expect(corp.credits).toBe(4); // full production, sabotage ignored
+});
+
 test('Data Sovereignty Act gives Data Centers +20% (floored on total)', () => {
   const corpId = makeCorp({ intelligence: 0, workforce: 10 });
   // Assign all 4 data_centers in the map

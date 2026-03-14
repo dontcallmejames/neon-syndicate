@@ -51,6 +51,7 @@ function generateResources(db, seasonId, tick) {
               lawEffect === 'data_center_bonus') {
             effectiveAmount *= 1.2;
           }
+          // Multipliers stack: an understaffed sabotaged district produces at 25% (0.5 × 0.5)
           delta[resource] += effectiveAmount * workforceMultiplier * sabotageMultiplier;
         }
       }
