@@ -1,6 +1,22 @@
 // src/game/actions/trades.js
 const { writeEvent } = require('../events');
 
+const RESOURCE_COL_MAP = {
+  credits: 'credits',
+  energy: 'energy',
+  workforce: 'workforce',
+  intelligence: 'intelligence',
+  influence: 'influence',
+  politicalPower: 'political_power',
+};
+
+function transferResource(db, resource, amount, fromId, toId) {
+  const col = RESOURCE_COL_MAP[resource];
+  if (!col) return; // unknown resource — skip silently
+  db.prepare(`UPDATE corporations SET ${col} = ${col} - ? WHERE id = ?`).run(amount, fromId);
+  db.prepare(`UPDATE corporations SET ${col} = ${col} + ? WHERE id = ?`).run(amount, toId);
+}
+
 function isAllied(db, corpAId, corpBId) {
   return !!db.prepare(`
     SELECT id FROM alliances
@@ -27,6 +43,7 @@ function resolveTrades(db, seasonId, tick, tradeActions) {
   const freeTradeActive = law && law.effect === 'free_trade';
 
   // Index by corpId for O(1) lookup
+  // If a corp appears twice in tradeActions, the last entry wins (upstream should deduplicate, but this is safe)
   const byCorpId = {};
   for (const ta of tradeActions) {
     byCorpId[ta.corpId] = ta.action;
@@ -56,15 +73,11 @@ function resolveTrades(db, seasonId, tick, tradeActions) {
 
     // Transfer offer from corpId to withCorpId
     for (const [resource, amount] of Object.entries(offer)) {
-      const col = resource === 'politicalPower' ? 'political_power' : resource;
-      db.prepare(`UPDATE corporations SET ${col} = ${col} - ? WHERE id = ?`).run(amount, corpId);
-      db.prepare(`UPDATE corporations SET ${col} = ${col} + ? WHERE id = ?`).run(amount, withCorpId);
+      transferResource(db, resource, amount, corpId, withCorpId);
     }
     // Transfer counterOffer from withCorpId to corpId
     for (const [resource, amount] of Object.entries(counterAction.offer)) {
-      const col = resource === 'politicalPower' ? 'political_power' : resource;
-      db.prepare(`UPDATE corporations SET ${col} = ${col} - ? WHERE id = ?`).run(amount, withCorpId);
-      db.prepare(`UPDATE corporations SET ${col} = ${col} + ? WHERE id = ?`).run(amount, corpId);
+      transferResource(db, resource, amount, withCorpId, corpId);
     }
     // Apply fees
     if (fee > 0) {
