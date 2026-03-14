@@ -52,8 +52,37 @@ async function generateNarratives(corpPayloadPairs) {
     console.warn('[gemini] GEMINI_API_KEY not set — skipping narrative generation');
     return {};
   }
-  // TODO Task 4
-  return {};
+
+  const model = getModel();
+  const corpSummaries = corpPayloadPairs.map(({ corp, payload }) => ({
+    id: corp.id,
+    name: corp.name,
+    tick: payload.tick,
+    holdings: payload.holdings.length,
+    resources: payload.resources,
+    reputationLabel: corp.reputationLabel,
+    eventCount: payload.events.length,
+    events: payload.events.slice(0, 5),
+  }));
+
+  const prompt = `You are writing cyberpunk tabloid briefings for a corporate strategy game. Write from each corp's perspective — dramatic, terse, present tense.
+
+For each corporation below, write 2-3 sentences of cyberpunk prose referencing their specific situation: district control, resources, recent events.
+
+Return ONLY valid JSON, no markdown, no explanation:
+{ "<corpId>": "narrative string", ... }
+
+Corporations:
+${JSON.stringify(corpSummaries, null, 2)}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return JSON.parse(text);
+  } catch (err) {
+    console.warn('[gemini] generateNarratives error:', err.message);
+    return {};
+  }
 }
 
 async function generateHeadlines(events, tick) {

@@ -108,6 +108,72 @@ describe('parseNLAction', () => {
   });
 });
 
+describe('generateNarratives', () => {
+  let mockGenerateContent;
+
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    mockGenerateContent = jest.fn();
+    GoogleGenerativeAI.mockImplementation(() => ({
+      getGenerativeModel: () => ({ generateContent: mockGenerateContent }),
+    }));
+  });
+
+  afterEach(() => {
+    delete process.env.GEMINI_API_KEY;
+    jest.clearAllMocks();
+  });
+
+  test('returns narrative map keyed by corp id on valid response', async () => {
+    const corpPayloadPairs = [
+      { corp: { id: 'corp1', name: 'Alpha Inc', reputation: 50, reputationLabel: 'Neutral' }, payload: { tick: 1, holdings: [], resources: { credits: 10, energy: 5, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+      { corp: { id: 'corp2', name: 'Beta Corp', reputation: 30, reputationLabel: 'Notorious' }, payload: { tick: 1, holdings: [], resources: { credits: 20, energy: 8, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+    ];
+    const geminiResponse = { corp1: 'Alpha narrative.', corp2: 'Beta narrative.' };
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify(geminiResponse) },
+    });
+
+    const result = await generateNarratives(corpPayloadPairs);
+    expect(result).toEqual(geminiResponse);
+  });
+
+  test('returns partial map when Gemini omits a corp key', async () => {
+    const corpPayloadPairs = [
+      { corp: { id: 'corp1', name: 'Alpha Inc', reputation: 50, reputationLabel: 'Neutral' }, payload: { tick: 1, holdings: [], resources: { credits: 10, energy: 5, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+      { corp: { id: 'corp2', name: 'Beta Corp', reputation: 30, reputationLabel: 'Notorious' }, payload: { tick: 1, holdings: [], resources: { credits: 20, energy: 8, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+    ];
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify({ corp1: 'Only Alpha.' }) },
+    });
+
+    const result = await generateNarratives(corpPayloadPairs);
+    expect(result).toEqual({ corp1: 'Only Alpha.' });
+    // corp2 key is absent — caller handles fallback
+    expect(result.corp2).toBeUndefined();
+  });
+
+  test('returns empty object when Gemini returns non-JSON', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => 'not json at all' },
+    });
+
+    const result = await generateNarratives([
+      { corp: { id: 'corp1', name: 'Alpha Inc', reputation: 50, reputationLabel: 'Neutral' }, payload: { tick: 1, holdings: [], resources: { credits: 10, energy: 5, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+    ]);
+    expect(result).toEqual({});
+  });
+
+  test('returns empty object when Gemini throws', async () => {
+    mockGenerateContent.mockRejectedValue(new Error('network error'));
+
+    const result = await generateNarratives([
+      { corp: { id: 'corp1', name: 'Alpha Inc', reputation: 50, reputationLabel: 'Neutral' }, payload: { tick: 1, holdings: [], resources: { credits: 10, energy: 5, workforce: 0, intelligence: 0, influence: 0, politicalPower: 0 }, events: [] } },
+    ]);
+    expect(result).toEqual({});
+  });
+});
+
 describe('parseNLAction — no API key', () => {
   let originalKey;
   beforeEach(() => {
