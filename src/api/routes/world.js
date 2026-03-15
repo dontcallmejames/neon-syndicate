@@ -7,7 +7,7 @@ function parseJson(str, fallback = []) {
 
 module.exports = function worldRoute(conn) {
   return function (_req, res) {
-    const season = conn.prepare("SELECT * FROM seasons WHERE status = 'active' LIMIT 1").get();
+    const season = conn.prepare("SELECT * FROM seasons WHERE status != 'ended' ORDER BY created_at DESC LIMIT 1").get();
 
     if (!season) {
       // Check for a pending or ended season so we can report its status and corps

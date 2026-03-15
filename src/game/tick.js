@@ -87,6 +87,14 @@ async function runTick(db, seasonId) {
   // Step 1: Increment tick and set is_ticking flag
   // is_ticking = 1 signals to GET /briefing that generation is in progress
   const newTick = season.tick_count + 1;
+
+  // Auto-end season when tick limit is reached
+  if (newTick > season.season_length) {
+    conn.prepare("UPDATE seasons SET status = 'ended' WHERE id = ?").run(seasonId);
+    console.log(`[tick] Season ${seasonId} ended after ${season.season_length} ticks`);
+    return;
+  }
+
   conn.prepare('UPDATE seasons SET tick_count = ?, is_ticking = 1, last_tick_at = ? WHERE id = ?').run(newTick, Date.now(), seasonId);
   const updatedSeason = { ...season, tick_count: newTick };
 
@@ -136,8 +144,13 @@ async function runTick(db, seasonId) {
       payload: buildBriefingPayload(conn, corp, updatedSeason),
     }));
 
-    // Step 6: Generate narratives via Gemini
-    const narratives = await generateNarratives(corpPayloadPairs);
+    // Step 6: Generate narratives via Gemini (non-fatal — falls back to template narratives)
+    let narratives = {};
+    try {
+      narratives = await generateNarratives(corpPayloadPairs);
+    } catch (err) {
+      console.warn('[tick] generateNarratives error (non-fatal):', err.message);
+    }
     for (const { corp, payload } of corpPayloadPairs) {
       payload.narrative = narratives[corp.id] ?? buildFallbackNarrative(corp, payload);
     }
@@ -153,12 +166,17 @@ async function runTick(db, seasonId) {
       }
     })();
 
-    // Step 8: Generate and write headlines
+    // Step 8: Generate and write headlines (non-fatal)
     const events = conn.prepare(
       'SELECT * FROM events WHERE season_id = ? AND tick = ?'
     ).all(seasonId, newTick - 1);
-    const headlines = await generateHeadlines(events, newTick);
-    writeEvent(conn, { seasonId, tick: newTick, type: 'headline', narrative: headlines.join('\n') });
+    let headlines = [];
+    try {
+      headlines = await generateHeadlines(events, newTick);
+      writeEvent(conn, { seasonId, tick: newTick, type: 'headline', narrative: headlines.join('\n') });
+    } catch (err) {
+      console.warn('[tick] generateHeadlines error (non-fatal):', err.message);
+    }
 
     // Step 13: Broadcast tick_complete to WebSocket dashboard clients
     const broadcastDistricts = conn.prepare(`
