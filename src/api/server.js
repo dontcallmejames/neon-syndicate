@@ -30,7 +30,7 @@ function createServer(db) {
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
   // Serve HTML pages without auth — pages handle their own auth client-side
-  app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../../public/admin.html')));
+  app.get('/admin', (_req, res) => res.sendFile('admin.html', { root: path.join(__dirname, '../../public') }));
   app.get('/play',  (_req, res) => res.sendFile('play.html',  { root: path.join(__dirname, '../../public') }));
   app.get('/game',  (_req, res) => res.sendFile('game.html',  { root: path.join(__dirname, '../../public') }));
 
