@@ -88,10 +88,10 @@ test('lobby_votes has law_id column', () => {
   db.close();
 });
 
-test('seasons table has last_tick_at column', () => {
-  const db = new Database(':memory:');
-  initDb(db);
-  const cols = db.prepare("PRAGMA table_info(seasons)").all().map(c => c.name);
-  expect(cols).toContain('last_tick_at');
-  db.close();
+test('seasons table has last_tick_at column with correct type and default', () => {
+  const cols = db.prepare("PRAGMA table_info(seasons)").all();
+  const col = cols.find(c => c.name === 'last_tick_at');
+  expect(col).toBeDefined();
+  expect(col.type).toBe('INTEGER');
+  expect(col.dflt_value).toBe('0');
 });
