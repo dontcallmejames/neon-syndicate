@@ -285,17 +285,48 @@
       <div class="msg-section">
         <div class="msg-section-title">TRADE OFFER</div>
         <select id="trade-target" class="msg-select"></select>
-        <div style="display:flex; gap:8px; margin-top:6px;">
-          <div style="flex:1">
-            <label class="msg-label">OFFER</label>
-            <input type="text" id="trade-offer" class="msg-input" placeholder="e.g. 5 credits">
+        <div style="display:grid; grid-template-columns:1fr 80px 80px; gap:4px 8px; margin-top:8px; align-items:center;">
+          <div style="color:#374151; font-family:monospace; font-size:9px; letter-spacing:1px;"></div>
+          <div style="color:#4b5563; font-family:monospace; font-size:9px; text-align:center; letter-spacing:1px;">OFFER</div>
+          <div style="color:#4b5563; font-family:monospace; font-size:9px; text-align:center; letter-spacing:1px;">REQUEST</div>
+          <!-- energy -->
+          <div style="color:#9ca3af; font-family:monospace; font-size:10px;">⚡ Energy</div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <input type="range" id="trade-offer-energy" min="0" max="0" value="0" style="flex:1; accent-color:#00f5c4;" oninput="updateTradeReadout()">
+            <span id="trade-offer-energy-val" style="color:#fff; font-family:monospace; font-size:10px; min-width:16px; text-align:right;">0</span>
           </div>
-          <div style="flex:1">
-            <label class="msg-label">REQUEST</label>
-            <input type="text" id="trade-request" class="msg-input" placeholder="e.g. 3 energy">
+          <input type="number" id="trade-req-energy" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
+          <!-- credits -->
+          <div style="color:#9ca3af; font-family:monospace; font-size:10px;">💰 Credits</div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <input type="range" id="trade-offer-credits" min="0" max="0" value="0" style="flex:1; accent-color:#00f5c4;" oninput="updateTradeReadout()">
+            <span id="trade-offer-credits-val" style="color:#fff; font-family:monospace; font-size:10px; min-width:16px; text-align:right;">0</span>
           </div>
+          <input type="number" id="trade-req-credits" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
+          <!-- workforce -->
+          <div style="color:#9ca3af; font-family:monospace; font-size:10px;">👷 Labor</div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <input type="range" id="trade-offer-workforce" min="0" max="0" value="0" style="flex:1; accent-color:#00f5c4;" oninput="updateTradeReadout()">
+            <span id="trade-offer-workforce-val" style="color:#fff; font-family:monospace; font-size:10px; min-width:16px; text-align:right;">0</span>
+          </div>
+          <input type="number" id="trade-req-workforce" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
+          <!-- intelligence -->
+          <div style="color:#9ca3af; font-family:monospace; font-size:10px;">🔍 Intel</div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <input type="range" id="trade-offer-intelligence" min="0" max="0" value="0" style="flex:1; accent-color:#00f5c4;" oninput="updateTradeReadout()">
+            <span id="trade-offer-intelligence-val" style="color:#fff; font-family:monospace; font-size:10px; min-width:16px; text-align:right;">0</span>
+          </div>
+          <input type="number" id="trade-req-intelligence" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
+          <!-- influence -->
+          <div style="color:#9ca3af; font-family:monospace; font-size:10px;">🎭 Influence</div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <input type="range" id="trade-offer-influence" min="0" max="0" value="0" style="flex:1; accent-color:#00f5c4;" oninput="updateTradeReadout()">
+            <span id="trade-offer-influence-val" style="color:#fff; font-family:monospace; font-size:10px; min-width:16px; text-align:right;">0</span>
+          </div>
+          <input type="number" id="trade-req-influence" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
         </div>
-        <button class="msg-send-btn" onclick="sendTrade()">SEND TRADE</button>
+        <div id="trade-readout" style="color:#6b7280; font-family:monospace; font-size:10px; margin-top:6px; min-height:14px;"></div>
+        <button class="msg-send-btn" id="trade-send-btn" onclick="sendTrade()">SEND TRADE</button>
       </div>
       <div class="msg-section">
         <div class="msg-section-title">EMBARGOES</div>
@@ -371,6 +402,7 @@ async function loadBriefing() {
       startTimer(briefing.nextTickAt);
     }
     updateLogPanel();
+    updateTradeSliderMaxes();
     if (selectedDistrictId) renderSidePanel(selectedDistrictId);
   } catch (_) {}
 }
@@ -613,31 +645,62 @@ async function sendMessage() {
   document.getElementById('msg-text').value = '';
 }
 
+const TRADE_RESOURCES = ['energy', 'credits', 'workforce', 'intelligence', 'influence'];
+
+function updateTradeReadout() {
+  const offer = {}; const request = {};
+  for (const r of TRADE_RESOURCES) {
+    const ov = parseInt(document.getElementById(`trade-offer-${r}`)?.value) || 0;
+    const rv = parseInt(document.getElementById(`trade-req-${r}`)?.value) || 0;
+    if (ov > 0) offer[r] = ov;
+    if (rv > 0) request[r] = rv;
+    const valEl = document.getElementById(`trade-offer-${r}-val`);
+    if (valEl) valEl.textContent = ov;
+  }
+  const icons = { energy:'⚡', credits:'💰', workforce:'👷', intelligence:'🔍', influence:'🎭' };
+  const offerStr   = Object.entries(offer).map(([r,v])=>`${v}${icons[r]}`).join(' ') || '—';
+  const requestStr = Object.entries(request).map(([r,v])=>`${v}${icons[r]}`).join(' ') || '—';
+  const readout = document.getElementById('trade-readout');
+  if (readout) readout.textContent = `Offering ${offerStr}  ·  Requesting ${requestStr}`;
+}
+
+function updateTradeSliderMaxes() {
+  if (!briefing) return;
+  const res = briefing.resources || {};
+  const maxMap = { energy: res.energy||0, credits: res.credits||0, workforce: res.workforce||0, intelligence: res.intelligence||0, influence: res.influence||0 };
+  for (const r of TRADE_RESOURCES) {
+    const slider = document.getElementById(`trade-offer-${r}`);
+    if (!slider) continue;
+    const currentVal = parseInt(slider.value) || 0;
+    slider.max = maxMap[r];
+    if (currentVal > maxMap[r]) { slider.value = maxMap[r]; }
+  }
+  updateTradeReadout();
+}
+
 async function sendTrade() {
   const targetCorpId = document.getElementById('trade-target').value;
-  const tradeOffer   = document.getElementById('trade-offer').value.trim();
-  const tradeRequest = document.getElementById('trade-request').value.trim();
-  if (!targetCorpId || !tradeOffer || !tradeRequest) return;
+  if (!targetCorpId) return;
+  const offer = {}; const request = {};
+  for (const r of TRADE_RESOURCES) {
+    const ov = parseInt(document.getElementById(`trade-offer-${r}`)?.value) || 0;
+    const rv = parseInt(document.getElementById(`trade-req-${r}`)?.value) || 0;
+    if (ov > 0) offer[r] = ov;
+    if (rv > 0) request[r] = rv;
+  }
+  if (Object.keys(offer).length === 0 && Object.keys(request).length === 0) return;
   try {
-    const res = await apiFetch(`/action/${AGENT_ID}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        actions: {
-          primaryAction: { type: 'propose_trade', targetCorpId, offer: tradeOffer, request: tradeRequest },
-          freeActions: [],
-        },
-      }),
-    });
-    if (res.ok) {
-      const btn = document.querySelector('#pane-messages .msg-section .msg-send-btn');
-      const origText = btn ? btn.textContent : '';
-      if (btn) {
-        btn.textContent = 'Trade sent';
-        setTimeout(() => { btn.textContent = origText; }, 2000);
-      }
-      document.getElementById('trade-offer').value = '';
-      document.getElementById('trade-request').value = '';
+    const res = await submitFreeAction({ type: 'trade', withCorpId: targetCorpId, offer, request });
+    const btn = document.getElementById('trade-send-btn');
+    if (btn) { btn.textContent = '✓ Trade queued'; setTimeout(() => { btn.textContent = 'SEND TRADE'; }, 2000); }
+    // Reset sliders and inputs
+    for (const r of TRADE_RESOURCES) {
+      const slider = document.getElementById(`trade-offer-${r}`);
+      const input  = document.getElementById(`trade-req-${r}`);
+      if (slider) slider.value = 0;
+      if (input)  input.value  = 0;
     }
+    updateTradeReadout();
   } catch (_) {}
 }
 
