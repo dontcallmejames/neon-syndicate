@@ -1,7 +1,6 @@
 // src/api/server.js
 const http = require('http');
 const path = require('path');
-const fs = require('fs');
 const express = require('express');
 const { getDb } = require('../db/index');
 const { requireAuth } = require('./auth');
@@ -30,7 +29,12 @@ function createServer(db) {
   app.get('/world', worldRoute(conn));
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-  // Admin routes — protected by Bearer token, before static so /admin/* can't be shadowed
+  // Serve HTML pages without auth — pages handle their own auth client-side
+  app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../../public/admin.html')));
+  app.get('/play',  (_req, res) => res.sendFile('play.html',  { root: path.join(__dirname, '../../public') }));
+  app.get('/game',  (_req, res) => res.sendFile('game.html',  { root: path.join(__dirname, '../../public') }));
+
+  // Admin API routes — protected by Bearer token
   app.use('/admin', adminAuth);
   app.get('/admin/state', adminState(conn));
   app.use('/admin/seasons', adminSeasons(conn));
@@ -38,18 +42,6 @@ function createServer(db) {
   app.use('/admin/districts', adminDistricts(conn));
   app.use('/admin/laws', adminLaws(conn));
   app.use('/admin/events', adminEvents(conn));
-
-  // Serve static HTML routes without auth — pages handle their own auth
-  app.get('/play', (_req, res) => {
-    const filePath = path.resolve(__dirname, '../../public/play.html');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    res.type('text/html').send(content);
-  });
-  app.get('/game', (_req, res) => {
-    const filePath = path.resolve(__dirname, '../../public/game.html');
-    const content = fs.readFileSync(filePath, 'utf-8');
-    res.type('text/html').send(content);
-  });
 
   // Static file serving after routes
   // public/ created in Task 7 — no-op until then
