@@ -529,8 +529,8 @@ function renderMessages() {
   (briefing.pendingAlliances || []).forEach(pa => {
     html += `<div class="alliance-row">
       <span class="alliance-name">⭐ Alliance proposal from <b>${esc(pa.proposing_corp_name)}</b></span>
-      <button class="btn-accept" onclick="respondAlliance('${pa.proposing_corp_id}','accept')">ACCEPT</button>
-      <button class="btn-decline" onclick="respondAlliance('${pa.proposing_corp_id}','decline')">DECLINE</button>
+      <button class="btn-accept" onclick="respondAlliance('${esc(pa.proposing_corp_id)}','accept')">ACCEPT</button>
+      <button class="btn-decline" onclick="respondAlliance('${esc(pa.proposing_corp_id)}','decline')">DECLINE</button>
     </div>`;
   });
   (briefing.messages || []).forEach(m => {
