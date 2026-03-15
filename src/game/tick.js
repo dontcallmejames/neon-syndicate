@@ -87,7 +87,7 @@ async function runTick(db, seasonId) {
   // Step 1: Increment tick and set is_ticking flag
   // is_ticking = 1 signals to GET /briefing that generation is in progress
   const newTick = season.tick_count + 1;
-  conn.prepare('UPDATE seasons SET tick_count = ?, is_ticking = 1 WHERE id = ?').run(newTick, seasonId);
+  conn.prepare('UPDATE seasons SET tick_count = ?, is_ticking = 1, last_tick_at = ? WHERE id = ?').run(newTick, Date.now(), seasonId);
   const updatedSeason = { ...season, tick_count: newTick };
 
   try {
@@ -206,6 +206,7 @@ async function runTick(db, seasonId) {
       broadcast({
         type: 'tick_complete',
         tick: newTick,
+        nextTickAt: Date.now() + season.tick_interval_ms,
         districts: broadcastDistricts.map(d => ({
           id: d.id,
           name: d.name,

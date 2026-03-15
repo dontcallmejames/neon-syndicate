@@ -221,3 +221,12 @@ test('runTick completes normally even if broadcast throws', async () => {
   const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(seasonId);
   expect(season.is_ticking).toBe(0);
 });
+
+test('runTick sets last_tick_at on the season', async () => {
+  const before = Date.now();
+  await runTick(db, seasonId);
+  const after = Date.now();
+  const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(seasonId);
+  expect(season.last_tick_at).toBeGreaterThanOrEqual(before);
+  expect(season.last_tick_at).toBeLessThanOrEqual(after);
+});
