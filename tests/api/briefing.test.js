@@ -109,3 +109,12 @@ test('GET /briefing/:agentId returns pendingAlliances', async () => {
   expect(res.body.pendingAlliances[0].proposing_corp_id).toBe(proposerCorpId);
   expect(res.body.pendingAlliances[0].proposing_corp_name).toBe('ProposerCorp');
 });
+
+test('GET /briefing/:agentId includes nextTickAt in response', async () => {
+  const res = await request(app)
+    .get(`/briefing/${corpId}`)
+    .set('Authorization', `Bearer ${apiKey}`);
+
+  expect(res.status).toBe(200);
+  expect(typeof res.body.nextTickAt).toBe('number');
+});

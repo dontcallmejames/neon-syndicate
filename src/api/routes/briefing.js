@@ -20,7 +20,9 @@ function briefingRoute(db) {
     ).get(corp.id);
 
     if (stored && stored.tick === currentTick && !isGenerating) {
-      return res.json(JSON.parse(stored.payload));
+      const payload = JSON.parse(stored.payload);
+      payload.nextTickAt = (season.last_tick_at || 0) + (season.tick_interval_ms || 0);
+      return res.json(payload);
     }
 
     // Build live briefing from current DB state
@@ -71,6 +73,7 @@ function briefingRoute(db) {
     const payload = {
       tick: currentTick,
       generating: isGenerating,
+      nextTickAt: season ? (season.last_tick_at || 0) + (season.tick_interval_ms || 0) : 0,
       valuation: calculateValuation(corp, holdings.length),
       rank: null, // computed during tick loop when all corps are scored
       holdings,
