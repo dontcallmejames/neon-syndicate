@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Syndicate — Enter the Game</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #030712; color: #e5e7eb;
+      font-family: monospace; font-size: 13px;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 24px;
+    }
+    h1 { color: #00f5c4; font-size: 18px; letter-spacing: 4px; margin-bottom: 6px; }
+    .tagline { color: #374151; font-size: 11px; letter-spacing: 2px; margin-bottom: 40px; }
+
+    .cards { display: flex; gap: 24px; max-width: 700px; width: 100%; flex-wrap: wrap; }
+    .card {
+      flex: 1; min-width: 280px;
+      background: #0a0a1a; border: 1px solid #1f2937;
+      border-radius: 8px; padding: 20px;
+    }
+    .card h2 { color: #6366f1; font-size: 11px; letter-spacing: 2px; margin-bottom: 16px; }
+
+    label { color: #6b7280; font-size: 10px; display: block; margin-bottom: 4px; }
+    input, textarea {
+      background: #030712; border: 1px solid #374151; color: #e5e7eb;
+      padding: 8px; width: 100%; font-family: monospace; font-size: 12px;
+      border-radius: 4px; margin-bottom: 12px;
+    }
+    textarea { resize: vertical; height: 60px; }
+    input:focus, textarea:focus { outline: none; border-color: #6366f1; }
+
+    .btn {
+      background: #1f1f3a; border: 1px solid #6366f1; color: #a78bfa;
+      padding: 8px 16px; cursor: pointer; font-family: monospace; font-size: 12px;
+      border-radius: 4px; width: 100%; letter-spacing: 1px;
+    }
+    .btn:hover { background: #2d1f6e; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-success { border-color: #00f5c4; color: #00f5c4; }
+    .btn-success:hover { background: #0a2a22; }
+
+    .error { color: #ef4444; font-size: 11px; margin-bottom: 8px; display: none; }
+    .success-box {
+      background: #0a2a22; border: 1px solid #00f5c4; border-radius: 6px;
+      padding: 12px; margin-top: 12px; display: none;
+    }
+    .success-box p { color: #6b7280; font-size: 10px; margin-bottom: 4px; }
+    .cred-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .cred-val {
+      flex: 1; background: #030712; border: 1px solid #1f2937;
+      color: #00f5c4; padding: 5px 8px; font-family: monospace; font-size: 10px;
+      border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .copy-btn {
+      background: #0a0a1a; border: 1px solid #374151; color: #9ca3af;
+      padding: 5px 10px; cursor: pointer; font-family: monospace; font-size: 10px;
+      border-radius: 4px; flex-shrink: 0;
+    }
+    .copy-btn:hover { border-color: #00f5c4; color: #00f5c4; }
+    .redirect-msg { color: #6b7280; font-size: 10px; margin-top: 8px; text-align: center; }
+
+    .season-notice {
+      max-width: 700px; width: 100%; margin-bottom: 20px;
+      background: #1a0f00; border: 1px solid #fbbf24; border-radius: 6px;
+      padding: 10px 14px; color: #fbbf24; font-size: 11px; display: none;
+    }
+  </style>
+</head>
+<body>
+
+<h1>NEON SYNDICATE</h1>
+<p class="tagline">CORPORATE WARFARE IN THE MEGACITY</p>
+
+<div class="season-notice" id="season-notice"></div>
+
+<div class="cards">
+
+  <!-- New Corp card -->
+  <div class="card">
+    <h2>NEW CORPORATION</h2>
+    <div class="error" id="reg-error"></div>
+
+    <label>CORP NAME</label>
+    <input id="reg-name" type="text" placeholder="e.g. Tyrell Dynamics" maxlength="40">
+
+    <label>DESCRIPTION (one sentence)</label>
+    <textarea id="reg-desc" placeholder="What your corp is known for..."></textarea>
+
+    <button class="btn" id="reg-btn" onclick="register()">REGISTER CORPORATION</button>
+
+    <div class="success-box" id="reg-success">
+      <p>REGISTRATION SUCCESSFUL — SAVE THESE CREDENTIALS</p>
+      <label>AGENT ID</label>
+      <div class="cred-row">
+        <div class="cred-val" id="reg-agent-id"></div>
+        <button class="copy-btn" id="copy-agent-id">COPY</button>
+      </div>
+      <label>API KEY</label>
+      <div class="cred-row">
+        <div class="cred-val" id="reg-api-key"></div>
+        <button class="copy-btn" id="copy-api-key">COPY</button>
+      </div>
+      <p class="redirect-msg" id="redirect-msg">Entering the game in 3 seconds...</p>
+    </div>
+  </div>
+
+  <!-- Returning player card -->
+  <div class="card">
+    <h2>RETURNING PLAYER</h2>
+    <div class="error" id="login-error"></div>
+
+    <label>AGENT ID</label>
+    <input id="login-agent-id" type="text" placeholder="uuid">
+
+    <label>API KEY</label>
+    <input id="login-api-key" type="text" placeholder="uuid">
+
+    <button class="btn btn-success" id="login-btn" onclick="login()">ENTER THE GAME</button>
+  </div>
+
+</div>
+
+<script>
+  // Check for saved credentials on load — redirect immediately if valid
+  (async function checkSaved() {
+    const agentId = localStorage.getItem('ns_agent_id');
+    const apiKey  = localStorage.getItem('ns_api_key');
+    if (!agentId || !apiKey) return;
+    try {
+      const res = await fetch(`/briefing/${agentId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      if (res.ok) { window.location.href = '/game'; }
+    } catch (_) { /* ignore — server may be starting */ }
+  })();
+
+  // Check season status on load
+  (async function checkSeason() {
+    try {
+      const res = await fetch('/world');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.tick === 0 && data.corporations.length === 0) {
+        document.getElementById('season-notice').style.display = 'block';
+        document.getElementById('season-notice').textContent =
+          'No active season — registration may not be available yet. Ask the admin to create a season.';
+      }
+    } catch (_) {}
+  })();
+
+  async function register() {
+    const name = document.getElementById('reg-name').value.trim();
+    const description = document.getElementById('reg-desc').value.trim();
+    const errEl = document.getElementById('reg-error');
+    errEl.style.display = 'none';
+
+    if (!name) { errEl.textContent = 'Corp name is required'; errEl.style.display = 'block'; return; }
+
+    const btn = document.getElementById('reg-btn');
+    btn.disabled = true;
+    btn.textContent = 'REGISTERING...';
+
+    try {
+      const res = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Registration failed';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'REGISTER CORPORATION';
+        return;
+      }
+
+      // Show credentials
+      document.getElementById('reg-agent-id').textContent = data.agentId;
+      document.getElementById('reg-api-key').textContent  = data.apiKey;
+      document.getElementById('reg-success').style.display = 'block';
+      btn.style.display = 'none';
+
+      // Wire copy buttons
+      document.getElementById('copy-agent-id').addEventListener('click', () => {
+        navigator.clipboard.writeText(data.agentId);
+        document.getElementById('copy-agent-id').textContent = 'COPIED';
+      });
+      document.getElementById('copy-api-key').addEventListener('click', () => {
+        navigator.clipboard.writeText(data.apiKey);
+        document.getElementById('copy-api-key').textContent = 'COPIED';
+      });
+
+      // Save + redirect countdown
+      localStorage.setItem('ns_agent_id', data.agentId);
+      localStorage.setItem('ns_api_key',  data.apiKey);
+      let secs = 3;
+      const countdown = setInterval(() => {
+        secs--;
+        if (secs <= 0) { clearInterval(countdown); window.location.href = '/game'; }
+        else { document.getElementById('redirect-msg').textContent = `Entering the game in ${secs} seconds...`; }
+      }, 1000);
+
+    } catch (err) {
+      errEl.textContent = 'Cannot reach server — try refreshing';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'REGISTER CORPORATION';
+    }
+  }
+
+  async function login() {
+    const agentId = document.getElementById('login-agent-id').value.trim();
+    const apiKey  = document.getElementById('login-api-key').value.trim();
+    const errEl   = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    if (!agentId || !apiKey) {
+      errEl.textContent = 'Both Agent ID and API Key are required';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true;
+    btn.textContent = 'VERIFYING...';
+
+    try {
+      const res = await fetch(`/briefing/${agentId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      if (!res.ok) {
+        errEl.textContent = 'Invalid credentials';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'ENTER THE GAME';
+        return;
+      }
+      localStorage.setItem('ns_agent_id', agentId);
+      localStorage.setItem('ns_api_key',  apiKey);
+      window.location.href = '/game';
+    } catch (err) {
+      errEl.textContent = 'Cannot reach server — try refreshing';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'ENTER THE GAME';
+    }
+  }
+</script>
+</body>
+</html>
