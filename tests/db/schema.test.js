@@ -87,3 +87,11 @@ test('lobby_votes has law_id column', () => {
   expect(row.law_id).toBe('l1');
   db.close();
 });
+
+test('seasons table has last_tick_at column', () => {
+  const db = new Database(':memory:');
+  initDb(db);
+  const cols = db.prepare("PRAGMA table_info(seasons)").all().map(c => c.name);
+  expect(cols).toContain('last_tick_at');
+  db.close();
+});

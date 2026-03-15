@@ -135,6 +135,9 @@ function initDb(db) {
   try {
     conn.exec("ALTER TABLE seasons ADD COLUMN starting_resources TEXT NOT NULL DEFAULT '{}'");
   } catch (_) { /* column already exists — safe to ignore */ }
+  try {
+    conn.exec("ALTER TABLE seasons ADD COLUMN last_tick_at INTEGER NOT NULL DEFAULT 0");
+  } catch (_) { /* column already exists — safe to ignore */ }
   conn.pragma('foreign_keys = ON');
 }
 
