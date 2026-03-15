@@ -47,6 +47,15 @@
     #map-area { flex: 1; position: relative; overflow: hidden; }
     #city-svg { width: 100%; height: 100%; }
 
+    /* ── District pulse animation ────────────────────────────────────── */
+    @keyframes districtPulse {
+      0%, 100% { stroke-opacity: 1; }
+      50% { stroke-opacity: 0.4; }
+    }
+    .mine-district {
+      animation: districtPulse 2s ease-in-out infinite;
+    }
+
     /* ── SIDE PANEL ──────────────────────────────────────────────────── */
     #side-panel {
       width: 0; overflow: hidden;
@@ -91,6 +100,15 @@
     #overlay h2 { color: #00f5c4; font-size: 14px; letter-spacing: 3px; }
     #overlay p  { color: #6b7280; font-size: 11px; }
     #overlay.hidden { display: none; }
+
+    #map-overlay {
+      display: none; position: absolute; inset: 0;
+      background: rgba(3,7,18,0.85);
+      flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; color: #e5e7eb; font-family: monospace;
+      text-align: center; padding: 24px;
+    }
+    #map-overlay.visible { display: flex; }
 
     /* Side panel inner styles */
     .sp-section { border-bottom: 1px solid #1e2a3a; padding-bottom: 10px; }
@@ -154,6 +172,27 @@
       font-size: 10px; border-radius: 3px;
     }
     .btn-send:hover { background: #2d1f6e; }
+
+    /* Trade / Embargo section */
+    .msg-section { margin-top: 10px; border-top: 1px solid #1e2a3a; padding-top: 8px; }
+    .msg-section-title { color: #374151; font-size: 9px; letter-spacing: 1px; margin-bottom: 6px; }
+    .msg-select {
+      background: #030712; border: 1px solid #1e2a3a; color: #e5e7eb;
+      padding: 5px; width: 100%; font-family: monospace; font-size: 11px;
+      border-radius: 3px; margin-bottom: 6px;
+    }
+    .msg-label { color: #4b5563; font-size: 9px; display: block; margin-bottom: 3px; }
+    .msg-input {
+      background: #030712; border: 1px solid #1e2a3a; color: #e5e7eb;
+      padding: 5px; width: 100%; font-family: monospace; font-size: 11px;
+      border-radius: 3px;
+    }
+    .msg-send-btn {
+      background: #1f1f3a; border: 1px solid #6366f1; color: #a78bfa;
+      padding: 5px; width: 100%; cursor: pointer; font-family: monospace;
+      font-size: 10px; border-radius: 3px; margin-top: 6px;
+    }
+    .msg-send-btn:hover { background: #2d1f6e; }
   </style>
 </head>
 <body>
@@ -187,6 +226,7 @@
 <div id="main">
   <div id="map-area">
     <svg id="city-svg" viewBox="0 0 900 540" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="map-overlay"></div>
   </div>
 
   <!-- SIDE PANEL -->
@@ -242,6 +282,25 @@
         <textarea id="msg-text" placeholder="Your message…"></textarea>
         <button class="btn-send" onclick="sendMessage()">SEND</button>
       </div>
+      <div class="msg-section">
+        <div class="msg-section-title">TRADE OFFER</div>
+        <select id="trade-target" class="msg-select"></select>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <div style="flex:1">
+            <label class="msg-label">OFFER</label>
+            <input type="text" id="trade-offer" class="msg-input" placeholder="e.g. 5 credits">
+          </div>
+          <div style="flex:1">
+            <label class="msg-label">REQUEST</label>
+            <input type="text" id="trade-request" class="msg-input" placeholder="e.g. 3 energy">
+          </div>
+        </div>
+        <button class="msg-send-btn" onclick="sendTrade()">SEND TRADE</button>
+      </div>
+      <div class="msg-section">
+        <div class="msg-section-title">EMBARGOES</div>
+        <div id="embargo-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -271,6 +330,7 @@ let logExpanded = false;
 let nextTickAt = 0;
 let tickIntervalMs = 60000;
 let timerInterval = null;
+let fallbackPollInterval = null;
 
 // ── Fetch helpers ──────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
@@ -289,8 +349,9 @@ async function loadWorld() {
     worldData.corporations.forEach((c, i) => {
       corpColorMap[c.id] = CORP_COLORS[i % CORP_COLORS.length];
     });
-    populateCorpDropdown();
+    populateCorpDropdowns();
     renderMap();
+    updateSeasonOverlay();
   } catch (_) {}
 }
 
@@ -356,6 +417,27 @@ function updateOverlay() {
   }
 }
 
+// ── Season overlay (pending / ended) ──────────────────────────────────────────
+function updateSeasonOverlay() {
+  if (!worldData) return;
+  const mapOverlay = document.getElementById('map-overlay');
+  const svg = document.getElementById('city-svg');
+
+  // The world route only returns active season data. If no corporations,
+  // there is no active season — show a pending-style overlay.
+  if (worldData.corporations.length === 0) {
+    mapOverlay.innerHTML = '<div style="font-size:16px;color:#00f5c4;letter-spacing:2px;margin-bottom:12px">Season hasn\'t started yet</div>'
+      + '<div style="color:#6b7280;font-size:11px">No corporations registered yet.</div>';
+    mapOverlay.classList.add('visible');
+    svg.style.pointerEvents = 'none';
+    return;
+  }
+
+  // Active season — hide overlay and restore interactivity
+  mapOverlay.classList.remove('visible');
+  svg.style.pointerEvents = '';
+}
+
 // ── Tick timer ─────────────────────────────────────────────────────────────────
 function startTimer(targetMs) {
   nextTickAt = targetMs;
@@ -393,6 +475,14 @@ function switchLogTab(tab) {
     el.classList.toggle('active', el.id === `pane-${tab}`);
   });
   document.getElementById(`badge-${tab}`).style.display = 'none';
+
+  // Expand log panel if it is collapsed
+  const logBody = document.getElementById('log-body');
+  if (!logBody.classList.contains('open')) {
+    logExpanded = true;
+    logBody.classList.add('open');
+    document.getElementById('log-toggle-btn').textContent = '▼ COLLAPSE';
+  }
 }
 
 function updateLogPanel() {
@@ -431,6 +521,9 @@ function renderMessages() {
   if (!html) html = '<div style="color:#374151;font-size:10px;padding:8px 0">No messages this tick</div>';
   el.innerHTML = html;
   if (briefing.messages?.length || briefing.pendingAlliances?.length) showBadge('messages');
+
+  // Populate embargo list
+  renderEmbargoList();
 }
 
 function showBadge(tab) {
@@ -440,18 +533,54 @@ function showBadge(tab) {
   }
 }
 
-function populateCorpDropdown() {
+function populateCorpDropdowns() {
   if (!worldData) return;
-  const sel = document.getElementById('msg-to-corp');
-  sel.innerHTML = '<option value="">Select…</option>';
-  worldData.corporations
-    .filter(c => c.id !== AGENT_ID)
-    .forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = c.name;
-      sel.appendChild(opt);
-    });
+  const otherCorps = worldData.corporations.filter(c => c.id !== AGENT_ID);
+
+  // Compose message dropdown
+  const msgSel = document.getElementById('msg-to-corp');
+  msgSel.innerHTML = '<option value="">Select…</option>';
+  otherCorps.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    msgSel.appendChild(opt);
+  });
+
+  // Trade target dropdown
+  const tradeSel = document.getElementById('trade-target');
+  tradeSel.innerHTML = '<option value="">Select…</option>';
+  otherCorps.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    tradeSel.appendChild(opt);
+  });
+
+  // Embargo list
+  renderEmbargoList();
+}
+
+// Keep old name for backward compatibility within this file
+function populateCorpDropdown() {
+  populateCorpDropdowns();
+}
+
+function renderEmbargoList() {
+  if (!worldData) return;
+  const el = document.getElementById('embargo-list');
+  if (!el) return;
+  const otherCorps = worldData.corporations.filter(c => c.id !== AGENT_ID);
+  if (otherCorps.length === 0) {
+    el.innerHTML = '<div style="color:#374151;font-size:10px">No other corporations</div>';
+    return;
+  }
+  el.innerHTML = otherCorps.map(corp => `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <span class="msg-label">${esc(corp.name)}</span>
+      <button class="msg-send-btn" id="embargo-btn-${esc(corp.id)}" onclick="sendEmbargo('${esc(corp.id)}')" style="width:auto;padding:3px 10px">EMBARGO</button>
+    </div>
+  `).join('');
 }
 
 async function sendMessage() {
@@ -460,6 +589,52 @@ async function sendMessage() {
   if (!toCorpId || !text) return;
   await submitFreeAction({ type: 'message', toCorpId, text });
   document.getElementById('msg-text').value = '';
+}
+
+async function sendTrade() {
+  const targetCorpId = document.getElementById('trade-target').value;
+  const tradeOffer   = document.getElementById('trade-offer').value.trim();
+  const tradeRequest = document.getElementById('trade-request').value.trim();
+  if (!targetCorpId || !tradeOffer || !tradeRequest) return;
+  try {
+    const res = await apiFetch(`/action/${AGENT_ID}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actions: {
+          primaryAction: { type: 'propose_trade', targetCorpId, offer: tradeOffer, request: tradeRequest },
+          freeActions: [],
+        },
+      }),
+    });
+    if (res.ok) {
+      const btn = document.querySelector('#pane-messages .msg-section .msg-send-btn');
+      const origText = btn ? btn.textContent : '';
+      if (btn) {
+        btn.textContent = 'Trade sent';
+        setTimeout(() => { btn.textContent = origText; }, 2000);
+      }
+      document.getElementById('trade-offer').value = '';
+      document.getElementById('trade-request').value = '';
+    }
+  } catch (_) {}
+}
+
+async function sendEmbargo(targetCorpId) {
+  const btn = document.getElementById(`embargo-btn-${targetCorpId}`);
+  try {
+    const res = await apiFetch(`/action/${AGENT_ID}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actions: { primaryAction: { type: 'embargo', targetCorpId }, freeActions: [] },
+      }),
+    });
+    if (res.ok && btn) {
+      const origText = btn.textContent;
+      btn.textContent = 'EMBARGOED';
+      btn.disabled = true;
+      setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
+    }
+  } catch (_) {}
 }
 
 async function respondAlliance(corpId, decision) {
@@ -492,6 +667,13 @@ function closeSidePanel() {
 
 document.getElementById('sp-close-btn').addEventListener('click', closeSidePanel);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidePanel(); });
+
+// Click on SVG background closes the side panel
+document.getElementById('city-svg').addEventListener('click', (e) => {
+  if (e.target.tagName === 'svg' || e.target.id === 'city-svg') {
+    closeSidePanel();
+  }
+});
 
 function renderSidePanel(districtId) {
   const district = worldData?.districts.find(d => d.id === districtId);
@@ -598,7 +780,7 @@ function renderActionButtons(district, isMine, isRival, isAdjacent) {
       <div style="color:#6b7280;font-size:9px;margin-bottom:4px">ENERGY TO SPEND (min 5)</div>
       <input type="range" id="attack-energy-slider" min="5" max="${r.energy}" value="5"
              oninput="updateAttackReadout(${district.fortificationLevel})">
-      <div id="attack-readout">Attack: — · Est. defense: —</div>
+      <div id="attack-readout">Attack strength: — · Est. defense: —</div>
       <button class="action-btn action-attack" style="margin-top:6px;display:none" id="attack-confirm"
               onclick="confirmAttack('${district.id}')">CONFIRM ATTACK</button>
     `;
@@ -625,7 +807,7 @@ function updateAttackReadout(fortLevel) {
   const attackStr = Math.round(energy * 1.5 + myWorkforce);
   const estDefense = fortLevel + 5;
   const likely = attackStr > estDefense ? '✓ likely WIN' : '⚠ may LOSE';
-  readout.textContent = `Attack: ${attackStr}  ·  Est. defense: ${estDefense}  ·  ${likely}`;
+  readout.textContent = `Attack strength: ${attackStr}  ·  Est. defense: ${estDefense}  ·  ${likely}`;
   readout.style.color = attackStr > estDefense ? '#4ade80' : '#f97316';
 }
 
@@ -765,6 +947,20 @@ function renderMap() {
     poly.style.cursor = 'pointer';
     poly.style.transition = 'fill-opacity 0.4s, stroke 0.4s';
 
+    // Dashed border for unowned districts; solid for owned
+    if (!d.ownerId) {
+      poly.setAttribute('stroke-dasharray', '4 3');
+    } else {
+      poly.setAttribute('stroke-dasharray', 'none');
+    }
+
+    // Pulse animation for player-owned districts
+    if (isMine) {
+      poly.classList.add('mine-district');
+    } else {
+      poly.classList.remove('mine-district');
+    }
+
     poly.addEventListener('mouseenter', () => {
       if (selectedDistrictId !== d.id) poly.setAttribute('fill-opacity', 0.6);
       showTooltip(d);
@@ -842,6 +1038,7 @@ function connectWs() {
   ws.onopen = () => {
     document.getElementById('ws-status').style.color = '#22c55e';
     document.getElementById('ws-reconnecting').style.display = 'none';
+    if (fallbackPollInterval) { clearInterval(fallbackPollInterval); fallbackPollInterval = null; }
   };
 
   ws.onmessage = async (ev) => {
@@ -860,6 +1057,7 @@ function connectWs() {
   ws.onclose = () => {
     document.getElementById('ws-status').style.color = '#374151';
     document.getElementById('ws-reconnecting').style.display = 'inline';
+    fallbackPollInterval = setInterval(() => loadBriefing(), 10000);
     wsRetryTimeout = setTimeout(connectWs, 5000);
   };
   ws.onerror = () => ws.close();
