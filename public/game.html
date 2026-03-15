@@ -253,17 +253,17 @@
 
 <!-- LOG PANEL -->
 <div id="log-panel">
-  <div id="log-tab-bar">
-    <div class="log-tab active" data-tab="narrative" onclick="switchLogTab('narrative')">
+  <div id="log-tab-bar" onclick="toggleLog()">
+    <div class="log-tab active" data-tab="narrative" onclick="switchLogTab('narrative'); event.stopPropagation()">
       NARRATIVE <span class="log-badge" id="badge-narrative"></span>
     </div>
-    <div class="log-tab" data-tab="events" onclick="switchLogTab('events')">
+    <div class="log-tab" data-tab="events" onclick="switchLogTab('events'); event.stopPropagation()">
       EVENTS <span class="log-badge" id="badge-events"></span>
     </div>
-    <div class="log-tab" data-tab="messages" onclick="switchLogTab('messages')">
+    <div class="log-tab" data-tab="messages" onclick="switchLogTab('messages'); event.stopPropagation()">
       MESSAGES <span class="log-badge" id="badge-messages"></span>
     </div>
-    <span style="margin-left:auto;color:#374151;font-size:10px;padding-right:4px" id="log-toggle-btn" onclick="toggleLog()">▲ EXPAND</span>
+    <span style="margin-left:auto;color:#374151;font-size:10px;padding-right:4px" id="log-toggle-btn" onclick="toggleLog(); event.stopPropagation()">▲ EXPAND</span>
   </div>
   <div id="log-body">
     <div class="log-pane active" id="pane-narrative">
@@ -423,17 +423,39 @@ function updateSeasonOverlay() {
   const mapOverlay = document.getElementById('map-overlay');
   const svg = document.getElementById('city-svg');
 
-  // The world route only returns active season data. If no corporations,
-  // there is no active season — show a pending-style overlay.
-  if (worldData.corporations.length === 0) {
-    mapOverlay.innerHTML = '<div style="font-size:16px;color:#00f5c4;letter-spacing:2px;margin-bottom:12px">Season hasn\'t started yet</div>'
-      + '<div style="color:#6b7280;font-size:11px">No corporations registered yet.</div>';
+  if (worldData.status === 'pending') {
+    const corpList = worldData.corporations.length
+      ? '<ul style="list-style:none;margin-top:8px">' +
+        worldData.corporations.map(c => `<li style="color:#e5e7eb;font-size:11px;padding:2px 0">${esc(c.name)}</li>`).join('') +
+        '</ul>'
+      : '<div style="color:#6b7280;font-size:11px;margin-top:8px">None yet.</div>';
+    mapOverlay.innerHTML =
+      '<div style="font-size:16px;color:#00f5c4;letter-spacing:2px;margin-bottom:8px">Season hasn\'t started yet</div>' +
+      '<div style="color:#6b7280;font-size:11px">Registered players:</div>' +
+      corpList;
     mapOverlay.classList.add('visible');
     svg.style.pointerEvents = 'none';
     return;
   }
 
-  // Active season — hide overlay and restore interactivity
+  if (worldData.status === 'ended') {
+    const sorted = [...worldData.corporations].sort((a, b) => b.valuation - a.valuation);
+    const rows = sorted.map((c, i) =>
+      `<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:11px">` +
+      `<span style="color:#6b7280;min-width:18px">#${i + 1}</span>` +
+      `<span style="color:#e5e7eb;flex:1">${esc(c.name)}</span>` +
+      `<span style="color:#ffd700">VAL ${c.valuation.toLocaleString()}</span>` +
+      `</div>`
+    ).join('');
+    mapOverlay.innerHTML =
+      '<div style="font-size:16px;color:#00f5c4;letter-spacing:2px;margin-bottom:12px">Season complete — final standings</div>' +
+      rows;
+    mapOverlay.classList.add('visible');
+    svg.style.pointerEvents = 'none';
+    return;
+  }
+
+  // Active season (or null status with no data) — hide overlay and restore interactivity
   mapOverlay.classList.remove('visible');
   svg.style.pointerEvents = '';
 }

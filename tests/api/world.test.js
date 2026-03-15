@@ -22,6 +22,7 @@ test('GET /world with no active season returns empty state', async () => {
   expect(res.status).toBe(200);
   expect(res.body).toEqual({
     type: 'world_state',
+    status: null,
     tick: 0,
     districts: [],
     corporations: [],
