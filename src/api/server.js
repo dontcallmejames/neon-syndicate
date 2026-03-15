@@ -1,6 +1,7 @@
 // src/api/server.js
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const { getDb } = require('../db/index');
 const { requireAuth } = require('./auth');
@@ -37,6 +38,18 @@ function createServer(db) {
   app.use('/admin/districts', adminDistricts(conn));
   app.use('/admin/laws', adminLaws(conn));
   app.use('/admin/events', adminEvents(conn));
+
+  // Serve static HTML routes without auth — pages handle their own auth
+  app.get('/play', (_req, res) => {
+    const filePath = path.resolve(__dirname, '../../public/play.html');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.type('text/html').send(content);
+  });
+  app.get('/game', (_req, res) => {
+    const filePath = path.resolve(__dirname, '../../public/game.html');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    res.type('text/html').send(content);
+  });
 
   // Static file serving after routes
   // public/ created in Task 7 — no-op until then
