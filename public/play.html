@@ -103,7 +103,8 @@
         <div class="cred-val" id="reg-api-key"></div>
         <button class="copy-btn" id="copy-api-key">COPY</button>
       </div>
-      <p class="redirect-msg" id="redirect-msg">Entering the game in 3 seconds...</p>
+      <button class="btn btn-success" id="enter-btn" onclick="window.location.href='/game'" style="margin-top:10px;">ENTER THE GAME →</button>
+      <p class="redirect-msg" id="redirect-msg"></p>
     </div>
   </div>
 
@@ -194,14 +195,14 @@
         document.getElementById('copy-api-key').textContent = 'COPIED';
       });
 
-      // Save + redirect countdown
+      // Save credentials + auto-redirect after 30s as fallback
       localStorage.setItem('ns_agent_id', data.agentId);
       localStorage.setItem('ns_api_key',  data.apiKey);
-      let secs = 3;
+      let secs = 30;
       const countdown = setInterval(() => {
         secs--;
         if (secs <= 0) { clearInterval(countdown); window.location.href = '/game'; }
-        else { document.getElementById('redirect-msg').textContent = `Entering the game in ${secs} seconds...`; }
+        else { document.getElementById('redirect-msg').textContent = `Auto-entering in ${secs}s…`; }
       }, 1000);
 
     } catch (err) {
