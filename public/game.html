@@ -752,7 +752,7 @@ function renderActionButtons(district, isMine, isRival, isAdjacent) {
 
   if (!district.ownerId) {
     if (isAdjacent && r.energy >= 3 && r.credits >= 5) {
-      html += `<button class="action-btn action-claim" onclick="submitPrimary({type:'claim',targetDistrictId:'${district.id}'})">CLAIM  ·  3⚡ 5💰</button>`;
+      html += `<button class="action-btn action-claim" onclick="submitPrimary({type:'claim',targetDistrictId:'${esc(district.id)}'})">CLAIM  ·  3⚡ 5💰</button>`;
     } else if (!isAdjacent) {
       html += `<div class="action-btn action-unavail">CLAIM<span class="unavail-reason">not adjacent to your holdings</span></div>`;
     } else {
@@ -762,7 +762,7 @@ function renderActionButtons(district, isMine, isRival, isAdjacent) {
 
   if (isMine) {
     if (district.fortificationLevel < 20 && r.energy >= 2 && r.credits >= 8) {
-      html += `<button class="action-btn action-fortify" onclick="submitPrimary({type:'fortify',targetDistrictId:'${district.id}'})">FORTIFY  ·  2⚡ 8💰  (+5 fort)</button>`;
+      html += `<button class="action-btn action-fortify" onclick="submitPrimary({type:'fortify',targetDistrictId:'${esc(district.id)}'})">FORTIFY  ·  2⚡ 8💰  (+5 fort)</button>`;
     } else if (district.fortificationLevel >= 20) {
       html += `<div class="action-btn action-unavail">FORTIFY<span class="unavail-reason">already at max fortification (20)</span></div>`;
     } else {
@@ -772,20 +772,20 @@ function renderActionButtons(district, isMine, isRival, isAdjacent) {
 
   if (isRival) {
     if (r.energy >= 5 && r.credits >= 10) {
-      html += `<button class="action-btn action-attack" id="attack-btn" onclick="toggleAttackSlider('${district.id}',${district.fortificationLevel})">ATTACK  ·  5⚡+ 10💰  −3 rep</button>`;
+      html += `<button class="action-btn action-attack" id="attack-btn" onclick="toggleAttackSlider('${esc(district.id)}',${district.fortificationLevel})">ATTACK  ·  5⚡+ 10💰  −3 rep</button>`;
     } else {
       html += `<div class="action-btn action-unavail">ATTACK<span class="unavail-reason">insufficient resources (need 5⚡ 10💰)</span></div>`;
     }
 
     if (r.energy >= 4 && r.credits >= 15 && r.influence >= 5) {
-      html += `<button class="action-btn action-sabotage" onclick="submitPrimary({type:'sabotage',targetDistrictId:'${district.id}'})">SABOTAGE  ·  4⚡ 15💰 5🎭  −5 rep</button>`;
+      html += `<button class="action-btn action-sabotage" onclick="submitPrimary({type:'sabotage',targetDistrictId:'${esc(district.id)}'})">SABOTAGE  ·  4⚡ 15💰 5🎭  −5 rep</button>`;
     } else {
       const reason = r.influence < 5 ? 'requires influence ≥ 5' : 'insufficient resources';
       html += `<div class="action-btn action-unavail">SABOTAGE<span class="unavail-reason">${reason}</span></div>`;
     }
 
     if (r.energy >= 2 && r.credits >= 10 && r.influence >= 5) {
-      html += `<button class="action-btn action-leak" onclick="submitPrimary({type:'leak_scandal',targetCorpId:'${district.ownerId}'})">LEAK SCANDAL  ·  2⚡ 10💰 5🎭  −3 rep</button>`;
+      html += `<button class="action-btn action-leak" onclick="submitPrimary({type:'leak_scandal',targetCorpId:'${esc(district.ownerId)}'})">LEAK SCANDAL  ·  2⚡ 10💰 5🎭  −3 rep</button>`;
     } else {
       const reason = r.influence < 5 ? 'requires influence ≥ 5' : 'insufficient resources';
       html += `<div class="action-btn action-unavail">LEAK SCANDAL<span class="unavail-reason">${reason}</span></div>`;
@@ -804,7 +804,7 @@ function renderActionButtons(district, isMine, isRival, isAdjacent) {
              oninput="updateAttackReadout(${district.fortificationLevel})">
       <div id="attack-readout">Attack strength: — · Est. defense: —</div>
       <button class="action-btn action-attack" style="margin-top:6px;display:none" id="attack-confirm"
-              onclick="confirmAttack('${district.id}')">CONFIRM ATTACK</button>
+              onclick="confirmAttack('${esc(district.id)}')">CONFIRM ATTACK</button>
     `;
     const attackBtn = document.getElementById('attack-btn');
     if (attackBtn) attackBtn.after(sliderWrap);
@@ -1064,19 +1064,25 @@ function connectWs() {
   };
 
   ws.onmessage = async (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.type === 'tick_complete') {
-      queuedActionTick = null;
-      if (msg.nextTickAt) startTimer(msg.nextTickAt);
-      await loadWorld();
-      await loadBriefing();
-      // Flash log tab bar border briefly
-      document.getElementById('log-tab-bar').style.borderTopColor = '#00f5c4';
-      setTimeout(() => { document.getElementById('log-tab-bar').style.borderTopColor = ''; }, 800);
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'tick_complete') {
+        queuedActionTick = null;
+        if (msg.nextTickAt) startTimer(msg.nextTickAt);
+        await loadWorld();
+        await loadBriefing();
+        // Flash log tab bar border briefly
+        document.getElementById('log-tab-bar').style.borderTopColor = '#00f5c4';
+        setTimeout(() => { document.getElementById('log-tab-bar').style.borderTopColor = ''; }, 800);
+      }
+    } catch (err) {
+      console.warn('WS message parse error:', err);
     }
   };
 
   ws.onclose = () => {
+    clearInterval(fallbackPollInterval);
+    fallbackPollInterval = null;
     document.getElementById('ws-status').style.color = '#374151';
     document.getElementById('ws-reconnecting').style.display = 'inline';
     fallbackPollInterval = setInterval(() => loadBriefing(), 10000);
@@ -1088,7 +1094,7 @@ function connectWs() {
 // ── Utilities ──────────────────────────────────────────────────────────────────
 function esc(str) {
   if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
