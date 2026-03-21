@@ -136,6 +136,56 @@
     #overlay p  { color: #6b7280; font-size: 11px; }
     #overlay.hidden { display: none; }
 
+    /* ── END-GAME RESULTS MODAL ──────────────────────────────────────── */
+    #results-modal {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(3,7,18,0.88);
+      display: flex; align-items: center; justify-content: center;
+      animation: resultsIn 0.4s ease;
+    }
+    #results-modal.hidden { display: none; }
+    @keyframes resultsIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    #results-card {
+      background: #0d1117; border: 1px solid #00f5c4;
+      border-radius: 8px; padding: 32px 40px; min-width: 340px; max-width: 480px;
+      box-shadow: 0 0 60px rgba(0,245,196,0.15), 0 0 120px rgba(0,245,196,0.06);
+      text-align: center;
+    }
+    #results-season-label {
+      color: #374151; font-size: 9px; letter-spacing: 2px; margin-bottom: 6px;
+    }
+    #results-title {
+      color: #00f5c4; font-size: 22px; letter-spacing: 4px; font-weight: bold;
+      margin-bottom: 4px;
+    }
+    #results-winner {
+      color: #ffd700; font-size: 15px; letter-spacing: 1px; margin-bottom: 24px;
+    }
+    .results-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid #1e2a3a;
+      text-align: left;
+    }
+    .results-row:last-child { border-bottom: none; }
+    .results-rank { color: #6b7280; font-size: 11px; min-width: 24px; font-family: monospace; }
+    .results-rank.gold   { color: #ffd700; }
+    .results-rank.silver { color: #94a3b8; }
+    .results-rank.bronze { color: #b87333; }
+    .results-corp { color: #e5e7eb; font-size: 12px; flex: 1; }
+    .results-corp.is-me  { color: #00f5c4; }
+    .results-val  { color: #ffd700; font-size: 11px; font-family: monospace; }
+    .results-details { color: #6b7280; font-size: 10px; font-family: monospace; margin-top: 1px; }
+    #results-dismiss {
+      margin-top: 24px; padding: 8px 24px;
+      background: transparent; border: 1px solid #00f5c4;
+      color: #00f5c4; font-family: monospace; font-size: 11px;
+      letter-spacing: 2px; cursor: pointer; border-radius: 4px;
+    }
+    #results-dismiss:hover { background: rgba(0,245,196,0.08); }
+
     #map-overlay {
       display: none; position: absolute; inset: 0;
       background: rgba(3,7,18,0.85);
@@ -487,6 +537,17 @@
   <p id="overlay-body"></p>
 </div>
 
+<!-- END-GAME RESULTS MODAL -->
+<div id="results-modal" class="hidden">
+  <div id="results-card">
+    <div id="results-season-label">SEASON COMPLETE</div>
+    <div id="results-title">FINAL STANDINGS</div>
+    <div id="results-winner"></div>
+    <div id="results-rows"></div>
+    <button id="results-dismiss" onclick="document.getElementById('results-modal').classList.add('hidden')">DISMISS</button>
+  </div>
+</div>
+
 <!-- NEWSPAPER OVERLAY -->
 <div id="newspaper-overlay" class="hidden">
   <div id="newspaper">
@@ -521,6 +582,8 @@ let briefing = null;
 let worldData = null;
 let selectedDistrictId = null;
 let queuedActionTick = null;
+let queuedPrimary = null;       // current tick's primary action
+let queuedFreeActions = [];     // current tick's accumulated free actions
 let logExpanded = false;
 let nextTickAt = 0;
 let tickIntervalMs = 60000;
@@ -564,8 +627,15 @@ async function loadBriefing() {
       if (res.status === 401 || res.status === 403) { localStorage.clear(); window.location.href = '/play'; }
       return;
     }
-    briefing = await res.json();
-    if (briefing.generating) { setTimeout(loadBriefing, 3000); return; }
+    const newBriefing = await res.json();
+    if (newBriefing.generating) { setTimeout(loadBriefing, 3000); return; }
+    // If tick advanced, reset queued action state
+    if (briefing && newBriefing.tick > briefing.tick) {
+      queuedActionTick = null;
+      queuedPrimary = null;
+      queuedFreeActions = [];
+    }
+    briefing = newBriefing;
     updateTopBar();
     updateOverlay();
     if (briefing.nextTickAt && briefing.nextTickAt > 0) {
@@ -619,6 +689,39 @@ function updateOverlay() {
   }
 }
 
+// ── End-game results modal ─────────────────────────────────────────────────────
+let resultsShown = false;
+
+function showResultsModal(corporations) {
+  if (resultsShown) return;
+  resultsShown = true;
+
+  const sorted = [...corporations].sort((a, b) => b.valuation - a.valuation);
+  const winner = sorted[0];
+  const myCorpId = AGENT_ID || null;
+
+  const rankClasses = ['gold', 'silver', 'bronze'];
+  const medals = ['🥇', '🥈', '🥉'];
+
+  document.getElementById('results-winner').innerHTML =
+    winner ? `${medals[0]} <span style="color:#ffd700">${esc(winner.name)}</span> wins!` : '';
+
+  document.getElementById('results-rows').innerHTML = sorted.map((c, i) => {
+    const isMe = c.id === myCorpId;
+    const rankClass = rankClasses[i] || '';
+    return `<div class="results-row">
+      <span class="results-rank ${rankClass}">${medals[i] || `#${i + 1}`}</span>
+      <div style="flex:1">
+        <div class="results-corp ${isMe ? 'is-me' : ''}">${esc(c.name)}${isMe ? ' ◀ you' : ''}</div>
+        <div class="results-details">${c.districtCount ?? 0} districts · rep ${c.reputation ?? '—'}</div>
+      </div>
+      <span class="results-val">${(c.valuation ?? 0).toLocaleString()}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('results-modal').classList.remove('hidden');
+}
+
 // ── Season overlay (pending / ended) ──────────────────────────────────────────
 function updateSeasonOverlay() {
   if (!worldData) return;
@@ -637,10 +740,12 @@ function updateSeasonOverlay() {
     mapOverlay.style.paddingTop = '12px';
     mapOverlay.classList.add('visible');
     svg.style.pointerEvents = '';
+    resultsShown = false; // reset for next season
     return;
   }
 
   if (worldData.status === 'ended') {
+    // Show subtle map overlay too
     const sorted = [...worldData.corporations].sort((a, b) => b.valuation - a.valuation);
     const rows = sorted.map((c, i) =>
       `<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:11px">` +
@@ -654,10 +759,13 @@ function updateSeasonOverlay() {
       rows;
     mapOverlay.classList.add('visible');
     svg.style.pointerEvents = 'none';
+    // Show the big modal
+    showResultsModal(worldData.corporations);
     return;
   }
 
-  // Active season (or null status with no data) — hide overlay and restore interactivity
+  // Active season — hide overlays and reset results flag
+  resultsShown = false;
   mapOverlay.classList.remove('visible');
   mapOverlay.style.alignItems = '';
   mapOverlay.style.paddingTop = '';
@@ -733,8 +841,8 @@ function renderMessages() {
   (briefing.pendingAlliances || []).forEach(pa => {
     html += `<div class="alliance-row">
       <span class="alliance-name">⭐ Alliance proposal from <b>${esc(pa.proposing_corp_name)}</b></span>
-      <button class="btn-accept" onclick="respondAlliance('${esc(pa.proposing_corp_id)}','accept')">ACCEPT</button>
-      <button class="btn-decline" onclick="respondAlliance('${esc(pa.proposing_corp_id)}','decline')">DECLINE</button>
+      <button class="btn-accept" onclick="respondAlliance('${esc(pa.alliance_id)}','accept')">ACCEPT</button>
+      <button class="btn-decline" onclick="respondAlliance('${esc(pa.alliance_id)}','decline')">DECLINE</button>
     </div>`;
   });
   (briefing.messages || []).forEach(m => {
@@ -879,13 +987,8 @@ async function sendTrade() {
 async function sendEmbargo(targetCorpId) {
   const btn = document.getElementById(`embargo-btn-${targetCorpId}`);
   try {
-    const res = await apiFetch(`/action/${AGENT_ID}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        actions: { primaryAction: { type: 'embargo', targetCorpId }, freeActions: [] },
-      }),
-    });
-    if (res.ok && btn) {
+    await submitFreeAction({ type: 'embargo', targetCorpId });
+    if (btn) {
       const origText = btn.textContent;
       btn.textContent = 'EMBARGOED';
       btn.disabled = true;
@@ -894,8 +997,8 @@ async function sendEmbargo(targetCorpId) {
   } catch (_) {}
 }
 
-async function respondAlliance(corpId, decision) {
-  await submitFreeAction({ type: `${decision}_alliance`, targetCorpId: corpId });
+async function respondAlliance(allianceId, decision) {
+  await submitFreeAction({ type: `${decision}_alliance`, allianceId });
   await loadBriefing();
 }
 
@@ -1138,13 +1241,22 @@ function confirmAttack(districtId) {
 }
 
 // ── Action submission ──────────────────────────────────────────────────────────
+// Both submitPrimary and submitFreeAction merge into a single queued action object
+// and re-POST the full merged state. This prevents free actions from overwriting
+// primary actions and vice versa.
+async function flushAction() {
+  const res = await apiFetch(`/action/${AGENT_ID}`, {
+    method: 'POST',
+    body: JSON.stringify({ actions: { primaryAction: queuedPrimary, freeActions: [...queuedFreeActions] } }),
+  });
+  return res;
+}
+
 async function submitPrimary(primaryAction) {
   const currentTick = briefing?.tick ?? 0;
   try {
-    const res = await apiFetch(`/action/${AGENT_ID}`, {
-      method: 'POST',
-      body: JSON.stringify({ actions: { primaryAction, freeActions: [] } }),
-    });
+    queuedPrimary = primaryAction;
+    const res = await flushAction();
     if (res.ok) {
       queuedActionTick = currentTick;
       if (selectedDistrictId) renderSidePanel(selectedDistrictId);
@@ -1154,10 +1266,14 @@ async function submitPrimary(primaryAction) {
 
 async function submitFreeAction(freeAction) {
   try {
-    await apiFetch(`/action/${AGENT_ID}`, {
-      method: 'POST',
-      body: JSON.stringify({ actions: { primaryAction: null, freeActions: [freeAction] } }),
+    // Deduplicate by type+key — replacing any prior free action of same type+target
+    const key = freeAction.type + (freeAction.withCorpId || freeAction.targetCorpId || freeAction.toCorpId || freeAction.lawId || '');
+    queuedFreeActions = queuedFreeActions.filter(fa => {
+      const faKey = fa.type + (fa.withCorpId || fa.targetCorpId || fa.toCorpId || fa.lawId || '');
+      return faKey !== key;
     });
+    queuedFreeActions.push(freeAction);
+    await flushAction();
   } catch (_) {}
 }
 
@@ -1456,6 +1572,8 @@ function connectWs() {
       const msg = JSON.parse(ev.data);
       if (msg.type === 'tick_complete') {
         queuedActionTick = null;
+        queuedPrimary = null;
+        queuedFreeActions = [];
         if (msg.nextTickAt) startTimer(msg.nextTickAt);
         await loadWorld();
         await loadBriefing();

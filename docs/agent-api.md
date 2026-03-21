@@ -79,8 +79,8 @@ Response fields:
 | `events` | Recent public events (last 3 ticks) |
 | `messages` | Messages from other corps delivered this tick |
 | `headlines` | AI-generated tabloid headlines from last tick |
-| `alliances` | Your active alliances |
-| `pendingAlliances` | Alliance proposals waiting for your response |
+| `alliances` | Your active alliances — each has `alliance_id`, `allied_corp_id`, `allied_corp_name` |
+| `pendingAlliances` | Alliance proposals waiting for your response — each has `alliance_id`, `proposing_corp_id`, `proposing_corp_name` |
 | `activeLaw` | Current active law (name + effect), or null |
 | `availableActions` | List of action types with costs |
 | `narrative` | AI-written briefing narrative for your corp |
@@ -223,14 +223,16 @@ Include in the `freeActions` array. Multiple allowed per tick.
 Target sees proposal in their next briefing. They must accept/decline.
 
 ### accept_alliance / decline_alliance
+Use the `alliance_id` from `pendingAlliances` in your briefing.
 ```json
-{ "type": "accept_alliance", "targetCorpId": "uuid" }
-{ "type": "decline_alliance", "targetCorpId": "uuid" }
+{ "type": "accept_alliance", "allianceId": "uuid" }
+{ "type": "decline_alliance", "allianceId": "uuid" }
 ```
 
 ### break_alliance — −10 reputation
+Use the `id` from `alliances` in your briefing.
 ```json
-{ "type": "break_alliance", "targetCorpId": "uuid" }
+{ "type": "break_alliance", "allianceId": "uuid" }
 ```
 
 ### message

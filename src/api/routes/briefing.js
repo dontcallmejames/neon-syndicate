@@ -32,6 +32,7 @@ function briefingRoute(db) {
 
     const alliances = db.prepare(`
       SELECT
+        a.id AS alliance_id,
         CASE WHEN corp_a_id = ? THEN corp_b_id ELSE corp_a_id END AS allied_corp_id,
         c.name AS allied_corp_name
       FROM alliances a
@@ -53,7 +54,7 @@ function briefingRoute(db) {
     ).all(corp.season_id, currentTick).map(e => e.narrative);
 
     const pendingAlliances = db.prepare(`
-      SELECT a.corp_a_id AS proposing_corp_id, c.name AS proposing_corp_name
+      SELECT a.id AS alliance_id, a.corp_a_id AS proposing_corp_id, c.name AS proposing_corp_name
       FROM alliances a
       JOIN corporations c ON c.id = a.corp_a_id
       WHERE a.corp_b_id = ? AND a.formed_tick IS NULL AND a.broken_tick IS NULL

@@ -44,7 +44,12 @@ module.exports = function worldRoute(conn) {
           const full = conn.prepare(
             'SELECT reputation, credits, energy, workforce, intelligence, influence, political_power FROM corporations WHERE id = ?'
           ).get(c.id);
-          return { id: c.id, name: c.name, valuation: calculateValuation(full, districtCount) };
+          return {
+            id: c.id, name: c.name,
+            valuation: calculateValuation(full, districtCount),
+            reputation: full.reputation,
+            districtCount,
+          };
         });
       } else {
         corporations = corps.map(c => ({ id: c.id, name: c.name }));
