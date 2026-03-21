@@ -27,18 +27,24 @@ module.exports = function adminEventsRouter(db) {
   });
 
   router.get('/', (req, res) => {
-    const season = getActiveSeason();
-    if (!season) return res.status(404).json({ error: 'No active season' });
+    let seasonId = req.query.season_id;
+    if (!seasonId) {
+      const season = getActiveSeason();
+      if (!season) return res.status(404).json({ error: 'No active season' });
+      seasonId = season.id;
+    }
 
     const limit = Math.min(parseInt(req.query.limit) || 50, 500);
     const offset = parseInt(req.query.offset) || 0;
+    const type = req.query.type;
 
     const events = db.prepare(`
       SELECT id, type, tick, narrative FROM events
       WHERE season_id = ?
-      ORDER BY tick DESC
+      ${type ? 'AND type = ?' : ''}
+      ORDER BY tick ASC
       LIMIT ? OFFSET ?
-    `).all(season.id, limit, offset);
+    `).all(...[seasonId, ...(type ? [type] : []), limit, offset]);
 
     res.json(events);
   });
