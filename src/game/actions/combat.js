@@ -1,6 +1,11 @@
 // src/game/actions/combat.js
 const { writeEvent } = require('../events');
 
+// Workforce contribution to combat is capped — only so many workers can be
+// deployed in a single battle regardless of total holdings. This prevents
+// late-game map leaders from having effectively unlimited attack/defense power.
+const COMBAT_WORKFORCE_CAP = 20;
+
 function computeDefenseStrength(db, district, defender) {
   const adjacentIds = JSON.parse(district.adjacent_ids || '[]');
 
@@ -23,7 +28,9 @@ function computeDefenseStrength(db, district, defender) {
     }
   }
 
-  return district.fortification_level + defender.workforce + allianceBonus;
+  // Fortification coefficient * 3 so invested forts meaningfully resist max attacks.
+  // Cap workforce at COMBAT_WORKFORCE_CAP to prevent runaway leaders from being unassailable.
+  return district.fortification_level * 3 + Math.min(defender.workforce, COMBAT_WORKFORCE_CAP) + allianceBonus;
 }
 
 function getClaimCosts(db, seasonId) {
@@ -76,7 +83,7 @@ function resolveCombat(db, seasonId, tick, combatActions) {
     const results = attackers.map(({ corpId, action }) => {
       const attacker = db.prepare('SELECT * FROM corporations WHERE id = ?').get(corpId);
       const energySpent = action.energySpent;
-      const attackStrength = energySpent * 1.5 + attacker.workforce;
+      const attackStrength = energySpent * 1.5 + Math.min(attacker.workforce, COMBAT_WORKFORCE_CAP);
       db.prepare(`
         UPDATE corporations
         SET energy = energy - ?, credits = credits - 10, reputation = MAX(0, reputation - 3)
