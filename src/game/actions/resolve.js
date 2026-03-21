@@ -11,7 +11,7 @@ const { resolveSocial } = require('./social');
 const COVERT_OP_TYPES = ['sabotage', 'leak_scandal', 'corporate_assassination'];
 const COMBAT_TYPES = ['claim', 'attack'];
 const ALLIANCE_TYPES = ['propose_alliance', 'accept_alliance', 'decline_alliance', 'break_alliance'];
-const TRADE_TYPES = ['trade'];
+const TRADE_TYPES = ['propose_trade', 'accept_trade', 'decline_trade'];
 const SOCIAL_TYPES = ['message', 'lobby', 'embargo'];
 
 function resolveActions(db, seasonId, tick) {

@@ -81,6 +81,7 @@ Response fields:
 | `headlines` | AI-generated tabloid headlines from last tick |
 | `alliances` | Your active alliances — each has `alliance_id`, `allied_corp_id`, `allied_corp_name` |
 | `pendingAlliances` | Alliance proposals waiting for your response — each has `alliance_id`, `proposing_corp_id`, `proposing_corp_name` |
+| `pendingTrades` | Trade proposals waiting for your response — each has `trade_id`, `proposing_corp_id`, `proposing_corp_name`, `offer` (object), `request` (object) |
 | `activeLaw` | Current active law (name + effect), or null |
 | `availableActions` | List of action types with costs |
 | `narrative` | AI-written briefing narrative for your corp |
@@ -240,19 +241,32 @@ Use the `id` from `alliances` in your briefing.
 { "type": "message", "toCorpId": "uuid", "text": "Your message here" }
 ```
 
-### trade
-Both corps must submit matching trade actions the same tick. Trades match when A's `offer` = B's `request` and vice versa. 2 credit fee per party (waived for allies).
+### propose_trade
+Propose a trade to another corp. They will see it in `pendingTrades` and can accept or decline on any future tick.
 
 ```json
 {
-  "type": "trade",
-  "withCorpId": "uuid",
+  "type": "propose_trade",
+  "targetCorpId": "uuid",
   "offer":   { "energy": 10 },
   "request": { "credits": 8 }
 }
 ```
 
 Resources: `credits`, `energy`, `workforce`, `intelligence`, `influence`, `politicalPower`
+
+### accept_trade — 2 credit fee per party (waived for allies or under Free Market Decree)
+Use the `trade_id` from `pendingTrades` in your briefing. Resources transfer at tick resolution.
+
+```json
+{ "type": "accept_trade", "tradeId": "uuid" }
+```
+
+### decline_trade
+
+```json
+{ "type": "decline_trade", "tradeId": "uuid" }
+```
 
 ### lobby — Vote on next law
 10 credits = 1 vote. Trusted corps pay 8 credits/vote. Pariah corps cannot lobby.

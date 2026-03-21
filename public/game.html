@@ -195,6 +195,37 @@
     }
     #map-overlay.visible { display: flex; }
 
+    /* ── NOTIFICATION POPUP ─────────────────────────────────────────── */
+    #notif-popup {
+      position: fixed; bottom: 60px; right: 16px; z-index: 200;
+      width: 290px; max-height: 380px;
+      background: rgba(10,13,20,0.97); border: 1px solid #00f5c4;
+      border-radius: 6px; overflow: hidden;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.8), 0 0 20px rgba(0,245,196,0.08);
+      display: flex; flex-direction: column;
+      animation: notifIn 0.25s ease;
+    }
+    #notif-popup.hidden { display: none; }
+    @keyframes notifIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    #notif-header {
+      padding: 7px 12px; display: flex; justify-content: space-between;
+      align-items: center; border-bottom: 1px solid #1e2a3a; flex-shrink: 0;
+      background: rgba(0,245,196,0.04);
+    }
+    #notif-header-label { color: #00f5c4; font-size: 9px; letter-spacing: 1.5px; }
+    #notif-dismiss-btn { color: #4b5563; font-size: 10px; cursor: pointer; background: none; border: none; font-family: monospace; padding: 0; }
+    #notif-dismiss-btn:hover { color: #9ca3af; }
+    #notif-body { padding: 8px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .notif-item { border-bottom: 1px solid #111827; padding-bottom: 8px; }
+    .notif-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .notif-item-type { color: #374151; font-size: 8px; letter-spacing: 1px; margin-bottom: 2px; }
+    .notif-item-text { color: #9ca3af; font-size: 10px; margin-bottom: 5px; line-height: 1.4; }
+    .notif-item-text b { color: #e5e7eb; }
+    .notif-actions { display: flex; gap: 5px; }
+
     /* Side panel inner styles */
     .sp-section { border-bottom: 1px solid #1e2a3a; padding-bottom: 10px; }
     .sp-label { color: #374151; font-size: 9px; letter-spacing: 1px; margin-bottom: 4px; }
@@ -520,15 +551,26 @@
           <input type="number" id="trade-req-influence" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
         </div>
         <div id="trade-readout" style="color:#6b7280; font-family:monospace; font-size:10px; margin-top:5px; min-height:14px;"></div>
-        <button class="msg-send-btn" id="trade-send-btn" onclick="sendTrade()">SEND TRADE</button>
+        <button class="msg-send-btn" id="trade-send-btn" onclick="sendTrade()">PROPOSE TRADE</button>
       </div>
-      <!-- Right: embargoes -->
+      <!-- Right: pending trades + embargoes -->
       <div class="trade-col-side">
-        <div style="color:#374151;font-size:9px;letter-spacing:1px;margin-bottom:6px">EMBARGOES</div>
+        <div style="color:#374151;font-size:9px;letter-spacing:1px;margin-bottom:6px">INCOMING TRADES</div>
+        <div id="pending-trades-list"></div>
+        <div style="color:#374151;font-size:9px;letter-spacing:1px;margin:10px 0 6px">EMBARGOES</div>
         <div id="embargo-list"></div>
       </div>
     </div>
   </div>
+</div>
+
+<!-- NOTIFICATION POPUP -->
+<div id="notif-popup" class="hidden">
+  <div id="notif-header">
+    <span id="notif-header-label">PENDING ACTIONS</span>
+    <button id="notif-dismiss-btn" onclick="dismissNotif()">✕ DISMISS</button>
+  </div>
+  <div id="notif-body"></div>
 </div>
 
 <!-- OVERLAY (pending/ended season) -->
@@ -634,6 +676,7 @@ async function loadBriefing() {
       queuedActionTick = null;
       queuedPrimary = null;
       queuedFreeActions = [];
+      notifDismissedTick = -1;
     }
     briefing = newBriefing;
     updateTopBar();
@@ -642,6 +685,7 @@ async function loadBriefing() {
       startTimer(briefing.nextTickAt);
     }
     updateLogPanel();
+    renderNotifPopup();
     updateTradeSliderMaxes();
     if (selectedDistrictId) renderSidePanel(selectedDistrictId);
   } catch (_) {}
@@ -832,6 +876,8 @@ function updateLogPanel() {
     showBadge('events');
   }
   renderMessages();
+  renderPendingTrades();
+  if ((briefing.pendingTrades?.length || 0) > 0) showBadge('trade');
 }
 
 function renderMessages() {
@@ -970,10 +1016,9 @@ async function sendTrade() {
   }
   if (Object.keys(offer).length === 0 && Object.keys(request).length === 0) return;
   try {
-    const res = await submitFreeAction({ type: 'trade', withCorpId: targetCorpId, offer, request });
+    await submitFreeAction({ type: 'propose_trade', targetCorpId, offer, request });
     const btn = document.getElementById('trade-send-btn');
-    if (btn) { btn.textContent = '✓ Trade queued'; setTimeout(() => { btn.textContent = 'SEND TRADE'; }, 2000); }
-    // Reset sliders and inputs
+    if (btn) { btn.textContent = '✓ Proposed'; setTimeout(() => { btn.textContent = 'PROPOSE TRADE'; }, 2000); }
     for (const r of TRADE_RESOURCES) {
       const slider = document.getElementById(`trade-offer-${r}`);
       const input  = document.getElementById(`trade-req-${r}`);
@@ -1000,6 +1045,95 @@ async function sendEmbargo(targetCorpId) {
 async function respondAlliance(allianceId, decision) {
   await submitFreeAction({ type: `${decision}_alliance`, allianceId });
   await loadBriefing();
+}
+
+async function respondTrade(tradeId, decision) {
+  await submitFreeAction({ type: `${decision}_trade`, tradeId });
+  await loadBriefing();
+}
+
+// ── Pending trades panel ───────────────────────────────────────────────────────
+function renderPendingTrades() {
+  const el = document.getElementById('pending-trades-list');
+  if (!el || !briefing) return;
+  const pending = briefing.pendingTrades || [];
+  const icons = { energy:'⚡', credits:'💰', workforce:'👷', intelligence:'🔍', influence:'🎭' };
+  if (pending.length === 0) {
+    el.innerHTML = '<div style="color:#374151;font-size:10px;padding:2px 0">None</div>';
+    return;
+  }
+  el.innerHTML = pending.map(t => {
+    const offerStr   = Object.entries(t.offer).map(([r,v]) => `${v}${icons[r]||r}`).join(' ') || '—';
+    const requestStr = Object.entries(t.request).map(([r,v]) => `${v}${icons[r]||r}`).join(' ') || '—';
+    return `<div style="border-bottom:1px solid #111827;padding:5px 0">
+      <div style="color:#9ca3af;font-size:10px;margin-bottom:3px">
+        <b style="color:#e5e7eb">${esc(t.proposing_corp_name)}</b><br>
+        gives ${offerStr} · gets ${requestStr}
+      </div>
+      <div style="display:flex;gap:5px">
+        <button class="btn-accept" onclick="respondTrade('${esc(t.trade_id)}','accept')">ACCEPT</button>
+        <button class="btn-decline" onclick="respondTrade('${esc(t.trade_id)}','decline')">DECLINE</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Notification popup ─────────────────────────────────────────────────────────
+let notifDismissedTick = -1;
+
+function dismissNotif() {
+  notifDismissedTick = briefing?.tick ?? -1;
+  document.getElementById('notif-popup').classList.add('hidden');
+}
+
+function renderNotifPopup() {
+  if (!briefing) return;
+  const popup = document.getElementById('notif-popup');
+  const body  = document.getElementById('notif-body');
+  if (notifDismissedTick === briefing.tick) { popup.classList.add('hidden'); return; }
+
+  const icons = { energy:'⚡', credits:'💰', workforce:'👷', intelligence:'🔍', influence:'🎭' };
+  const items = [];
+
+  (briefing.pendingAlliances || []).forEach(pa => {
+    items.push(`<div class="notif-item">
+      <div class="notif-item-type">ALLIANCE PROPOSAL</div>
+      <div class="notif-item-text"><b>${esc(pa.proposing_corp_name)}</b> wants to form an alliance with you.</div>
+      <div class="notif-actions">
+        <button class="btn-accept" onclick="respondAlliance('${esc(pa.alliance_id)}','accept');renderNotifPopup()">ACCEPT</button>
+        <button class="btn-decline" onclick="respondAlliance('${esc(pa.alliance_id)}','decline');renderNotifPopup()">DECLINE</button>
+      </div>
+    </div>`);
+  });
+
+  (briefing.pendingTrades || []).forEach(t => {
+    const offerStr   = Object.entries(t.offer).map(([r,v]) => `${v}${icons[r]||r}`).join(' ') || '—';
+    const requestStr = Object.entries(t.request).map(([r,v]) => `${v}${icons[r]||r}`).join(' ') || '—';
+    items.push(`<div class="notif-item">
+      <div class="notif-item-type">TRADE PROPOSAL</div>
+      <div class="notif-item-text"><b>${esc(t.proposing_corp_name)}</b> offers ${offerStr} in exchange for ${requestStr}.</div>
+      <div class="notif-actions">
+        <button class="btn-accept" onclick="respondTrade('${esc(t.trade_id)}','accept');renderNotifPopup()">ACCEPT</button>
+        <button class="btn-decline" onclick="respondTrade('${esc(t.trade_id)}','decline');renderNotifPopup()">DECLINE</button>
+      </div>
+    </div>`);
+  });
+
+  (briefing.messages || []).forEach(m => {
+    const fromCorp = worldData?.corporations.find(c => c.id === m.from_corp_id);
+    const preview = m.text.length > 70 ? m.text.slice(0, 70) + '…' : m.text;
+    items.push(`<div class="notif-item">
+      <div class="notif-item-type">MESSAGE</div>
+      <div class="notif-item-text"><b>${esc(fromCorp?.name || 'Unknown')}:</b> ${esc(preview)}</div>
+      <div class="notif-actions">
+        <button class="btn-accept" style="border-color:#6366f1;color:#a78bfa" onclick="switchLogTab('messages');dismissNotif()">VIEW</button>
+      </div>
+    </div>`);
+  });
+
+  if (items.length === 0) { popup.classList.add('hidden'); return; }
+  body.innerHTML = items.join('');
+  popup.classList.remove('hidden');
 }
 
 // ── Side panel ─────────────────────────────────────────────────────────────────
@@ -1574,6 +1708,7 @@ function connectWs() {
         queuedActionTick = null;
         queuedPrimary = null;
         queuedFreeActions = [];
+        notifDismissedTick = -1;
         if (msg.nextTickAt) startTimer(msg.nextTickAt);
         await loadWorld();
         await loadBriefing();

@@ -131,6 +131,19 @@ function initDb(db) {
       target_corp_id TEXT NOT NULL,
       expires_tick INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS trades (
+      id TEXT PRIMARY KEY,
+      season_id TEXT NOT NULL,
+      proposing_corp_id TEXT NOT NULL,
+      target_corp_id TEXT NOT NULL,
+      offer TEXT NOT NULL DEFAULT '{}',
+      request TEXT NOT NULL DEFAULT '{}',
+      proposed_tick INTEGER NOT NULL,
+      accepted_tick INTEGER,
+      declined_tick INTEGER,
+      FOREIGN KEY (season_id) REFERENCES seasons(id)
+    );
   `);
   try {
     conn.exec("ALTER TABLE seasons ADD COLUMN starting_resources TEXT NOT NULL DEFAULT '{}'");

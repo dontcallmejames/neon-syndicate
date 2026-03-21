@@ -60,6 +60,22 @@ function briefingRoute(db) {
       WHERE a.corp_b_id = ? AND a.formed_tick IS NULL AND a.broken_tick IS NULL
     `).all(corp.id);
 
+    const pendingTrades = db.prepare(`
+      SELECT t.id AS trade_id, t.proposing_corp_id, c.name AS proposing_corp_name,
+             t.offer, t.request
+      FROM trades t
+      JOIN corporations c ON c.id = t.proposing_corp_id
+      WHERE t.target_corp_id = ?
+        AND t.accepted_tick IS NULL
+        AND t.declined_tick IS NULL
+    `).all(corp.id).map(t => ({
+      trade_id: t.trade_id,
+      proposing_corp_id: t.proposing_corp_id,
+      proposing_corp_name: t.proposing_corp_name,
+      offer: JSON.parse(t.offer),
+      request: JSON.parse(t.request),
+    }));
+
     const activeLaw = db.prepare(
       'SELECT name, effect FROM laws WHERE season_id = ? AND is_active = 1'
     ).get(corp.season_id);
@@ -93,6 +109,7 @@ function briefingRoute(db) {
       reputationLabel,
       alliances,
       pendingAlliances,
+      pendingTrades,
       activeLaw: activeLaw || null,
       availableActions: buildAvailableActions(isPariah),
     };
