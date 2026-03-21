@@ -16,12 +16,39 @@
     #top-bar {
       background: #0a0d14; border-bottom: 1px solid #1e2a3a;
       height: 38px; display: flex; align-items: center;
-      padding: 0 14px; gap: 10px; flex-shrink: 0; overflow: hidden;
+      padding: 0 14px; gap: 10px; flex-shrink: 0; overflow: visible;
     }
     #corp-name { color: #00f5c4; font-weight: bold; letter-spacing: 1px; font-size: 12px; white-space: nowrap; }
     .tb-sep { color: #1e2a3a; }
-    .tb-res { color: #9ca3af; white-space: nowrap; }
+    .tb-res { color: #9ca3af; white-space: nowrap; position: relative; }
     .tb-res span { color: #e5e7eb; }
+    .tb-res:hover { color: #c9d1d9; cursor: default; }
+
+    /* Resource hover tooltip */
+    .res-tip {
+      display: none;
+      position: absolute; top: calc(100% + 6px); left: 50%;
+      transform: translateX(-50%);
+      background: #09111f; border: 1px solid #1e3a52;
+      border-radius: 6px; padding: 10px 13px;
+      width: 200px; z-index: 50;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.7);
+    }
+    .res-tip::before {
+      content: ''; position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-bottom-color: #1e3a52;
+    }
+    .res-tip::after {
+      content: ''; position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-bottom-color: #09111f;
+    }
+    .tb-res:hover .res-tip { display: block; }
+    .res-tip-name { font-size: 12px; color: #e5e7eb; font-weight: bold; margin-bottom: 6px; }
+    .res-tip-desc { font-size: 10px; color: #6b7280; line-height: 1.55; white-space: normal; }
     #rep-label { white-space: nowrap; }
     .rep-trusted   { color: #4ade80; }
     .rep-neutral   { color: #9ca3af; }
@@ -45,7 +72,7 @@
 
     /* ── MAP AREA ────────────────────────────────────────────────────── */
     #map-area { flex: 1; position: relative; overflow: hidden; }
-    #city-svg { width: 100%; height: 100%; }
+    #city-svg { width: 100%; height: 100%; cursor: grab; }
 
     /* ── District pulse animation ────────────────────────────────────── */
     @keyframes districtPulse {
@@ -58,13 +85,17 @@
 
     /* ── SIDE PANEL ──────────────────────────────────────────────────── */
     #side-panel {
-      width: 0; overflow: hidden;
-      background: #0a1220; border-left: 1px solid #00f5c4;
-      transition: width 0.2s ease; display: flex; flex-direction: column;
-      flex-shrink: 0;
+      position: absolute; top: 16px; right: 16px;
+      width: 260px; max-height: calc(100% - 32px);
+      background: rgba(10, 18, 32, 0.93);
+      border: 1px solid #00f5c4; border-radius: 6px;
+      display: flex; flex-direction: column;
+      transform: translateX(calc(100% + 20px));
+      transition: transform 0.22s ease;
+      z-index: 5; overflow: hidden;
     }
-    #side-panel.open { width: 240px; }
-    #side-inner { width: 240px; padding: 12px; display: flex; flex-direction: column; gap: 10px; height: 100%; overflow-y: auto; }
+    #side-panel.open { transform: translateX(0); }
+    #side-inner { padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 
     /* ── LOG PANEL ───────────────────────────────────────────────────── */
     #log-panel { flex-shrink: 0; background: #0a0d14; border-top: 1px solid #1e2a3a; }
@@ -84,9 +115,13 @@
       padding: 1px 5px; border-radius: 8px; margin-left: 5px; display: none;
     }
     #log-body { height: 0; overflow: hidden; transition: height 0.2s ease; }
-    #log-body.open { height: 220px; overflow-y: auto; }
+    #log-body.open { height: 240px; overflow-y: auto; }
     .log-pane { display: none; padding: 10px 14px; height: 100%; overflow-y: auto; }
     .log-pane.active { display: block; }
+    #pane-trade { display: none; padding: 10px 14px; height: 100%; overflow: hidden; box-sizing: border-box; }
+    #pane-trade.active { display: flex; flex-direction: row; gap: 16px; }
+    .trade-col-main { flex: 1; min-width: 0; }
+    .trade-col-side { width: 180px; flex-shrink: 0; border-left: 1px solid #1e2a3a; padding-left: 14px; overflow-y: auto; }
     .log-narrative { color: #9ca3af; font-size: 11px; line-height: 1.6; white-space: pre-wrap; }
     .log-event { color: #6b7280; font-size: 10px; padding: 3px 0; border-bottom: 1px solid #111827; }
     .log-event-new { color: #9ca3af; }
@@ -193,6 +228,79 @@
       font-size: 10px; border-radius: 3px; margin-top: 6px;
     }
     .msg-send-btn:hover { background: #2d1f6e; }
+
+    /* ── NEWSPAPER OVERLAY ───────────────────────────────────────────── */
+    #newspaper-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    #newspaper-overlay.hidden { display: none; }
+
+    @keyframes npSpin {
+      0%   { transform: scale(0.04) rotate(-600deg); opacity: 0; }
+      40%  { opacity: 1; }
+      82%  { transform: scale(1.04) rotate(3deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    #newspaper {
+      width: 540px; max-height: 85vh; overflow-y: auto;
+      background: #f2ead8;
+      border: 5px double #1a1107;
+      padding: 22px 26px 18px;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: #1a1107;
+      animation: npSpin 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.9), inset 0 0 60px rgba(0,0,0,0.05);
+      cursor: pointer;
+    }
+
+    #np-title {
+      text-align: center; font-weight: 900; letter-spacing: 5px;
+      text-transform: uppercase; font-size: 26px; line-height: 1;
+      font-family: 'Times New Roman', serif;
+      padding: 4px 0 6px;
+    }
+    #np-edition {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 9px; letter-spacing: 1.5px; color: #5a4020;
+      border-top: 2px solid #1a1107; border-bottom: 2px solid #1a1107;
+      padding: 3px 2px; margin: 5px 0 8px;
+      text-transform: uppercase;
+    }
+    .np-rule { border: none; border-top: 1px solid #1a1107; margin: 7px 0; }
+    .np-rule-thick { border: none; border-top: 2px solid #1a1107; margin: 7px 0; }
+
+    #np-headline-main {
+      font-size: 30px; font-weight: 900; line-height: 1.1;
+      text-align: center; text-transform: uppercase;
+      font-family: 'Times New Roman', serif;
+      padding: 8px 0;
+      letter-spacing: 1px;
+    }
+    #np-deck {
+      text-align: center; font-style: italic;
+      font-size: 13px; color: #3a2a10; padding-bottom: 4px;
+    }
+    #np-subheads { padding: 4px 0; }
+    .np-subhead {
+      font-size: 12px; font-weight: bold; text-transform: uppercase;
+      padding: 4px 0; border-bottom: 1px dotted #8a7050;
+      letter-spacing: 0.5px;
+    }
+    #np-body {
+      font-size: 11px; line-height: 1.75; color: #2a1e0a;
+      text-align: justify; padding: 6px 0;
+      column-count: 2; column-gap: 18px;
+      column-rule: 1px solid #c8b89a;
+    }
+    #np-footer {
+      text-align: center; font-size: 9px; letter-spacing: 2px;
+      color: #8a7050; padding-top: 10px; font-style: italic;
+      text-transform: uppercase; border-top: 1px solid #c8b89a; margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -203,12 +311,42 @@
   <span class="tb-sep">|</span>
   <span class="tb-res">VAL <span id="tb-val">–</span></span>
   <span class="tb-sep">|</span>
-  <span class="tb-res">⚡ <span id="tb-energy">–</span></span>
-  <span class="tb-res">💰 <span id="tb-credits">–</span></span>
-  <span class="tb-res">👷 <span id="tb-workforce">–</span></span>
-  <span class="tb-res">🔍 <span id="tb-intel">–</span></span>
-  <span class="tb-res">🎭 <span id="tb-influence">–</span></span>
-  <span class="tb-res">🏛 <span id="tb-polpower">–</span></span>
+  <span class="tb-res">⚡ <span id="tb-energy">–</span>
+    <div class="res-tip">
+      <div class="res-tip-name">⚡ Energy</div>
+      <div class="res-tip-desc">Powers your operations. Spent on claiming districts, attacking, fortifying, and running covert actions. Replenishes each tick based on your holdings.</div>
+    </div>
+  </span>
+  <span class="tb-res">💰 <span id="tb-credits">–</span>
+    <div class="res-tip">
+      <div class="res-tip-name">💰 Credits</div>
+      <div class="res-tip-desc">Your primary currency. Required for almost every action — attacks, fortifications, sabotage, lobbying, and trading all cost credits.</div>
+    </div>
+  </span>
+  <span class="tb-res">👷 <span id="tb-workforce">–</span>
+    <div class="res-tip">
+      <div class="res-tip-name">👷 Workforce</div>
+      <div class="res-tip-desc">The labor pool driving your holdings. A larger workforce increases production output across all your districts each tick.</div>
+    </div>
+  </span>
+  <span class="tb-res">🔍 <span id="tb-intel">–</span>
+    <div class="res-tip">
+      <div class="res-tip-name">🔍 Intelligence</div>
+      <div class="res-tip-desc">Surveillance data gathered across the city. Required to run counter-intelligence operations and defend against covert attacks. Min 10 to activate.</div>
+    </div>
+  </span>
+  <span class="tb-res">🎭 <span id="tb-influence">–</span>
+    <div class="res-tip">
+      <div class="res-tip-name">🎭 Influence</div>
+      <div class="res-tip-desc">Your network of back-channel contacts. Needed for sabotage, leaking scandals, and political maneuvering. Min 5 to use covert actions.</div>
+    </div>
+  </span>
+  <span class="tb-res">🏛 <span id="tb-polpower">–</span>
+    <div class="res-tip">
+      <div class="res-tip-name">🏛 Political Power</div>
+      <div class="res-tip-desc">Votes and sway in the city council. Spend it through lobbying to shape laws that benefit your corporation and disadvantage rivals.</div>
+    </div>
+  </span>
   <span class="tb-sep">|</span>
   <span id="rep-label">REP <span id="tb-rep">–</span></span>
 
@@ -227,26 +365,26 @@
   <div id="map-area">
     <svg id="city-svg" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="map-overlay"></div>
-  </div>
 
-  <!-- SIDE PANEL -->
-  <div id="side-panel">
-    <div id="side-inner">
-      <div class="sp-section">
-        <div class="sp-label">DISTRICT</div>
-        <div class="sp-name" id="sp-name">–</div>
-        <div class="sp-sub" id="sp-sub">–</div>
+    <!-- SIDE PANEL (overlay) -->
+    <div id="side-panel">
+      <div id="side-inner">
+        <div class="sp-section">
+          <div class="sp-label">DISTRICT</div>
+          <div class="sp-name" id="sp-name">–</div>
+          <div class="sp-sub" id="sp-sub">–</div>
+        </div>
+        <div class="sp-section">
+          <div class="sp-stat">YIELD / TICK <span id="sp-yield">–</span></div>
+          <div class="sp-stat">FORTIFICATION <span id="sp-fort-val">0 / 20</span></div>
+          <div class="fort-bar"><div class="fort-fill" id="sp-fort-bar" style="width:0%"></div></div>
+        </div>
+        <div class="sp-section" id="sp-adj-section">
+          <div id="sp-adj-status"></div>
+        </div>
+        <div id="sp-actions"></div>
+        <div class="sp-close" id="sp-close-btn">ESC to close</div>
       </div>
-      <div class="sp-section">
-        <div class="sp-stat">YIELD / TICK <span id="sp-yield">–</span></div>
-        <div class="sp-stat">FORTIFICATION <span id="sp-fort-val">0 / 20</span></div>
-        <div class="fort-bar"><div class="fort-fill" id="sp-fort-bar" style="width:0%"></div></div>
-      </div>
-      <div class="sp-section" id="sp-adj-section">
-        <div id="sp-adj-status"></div>
-      </div>
-      <div id="sp-actions"></div>
-      <div class="sp-close" id="sp-close-btn">ESC to close</div>
     </div>
   </div>
 </div>
@@ -262,6 +400,9 @@
     </div>
     <div class="log-tab" data-tab="messages" onclick="switchLogTab('messages'); event.stopPropagation()">
       MESSAGES <span class="log-badge" id="badge-messages"></span>
+    </div>
+    <div class="log-tab" data-tab="trade" onclick="switchLogTab('trade'); event.stopPropagation()">
+      TRADE <span class="log-badge" id="badge-trade"></span>
     </div>
     <span style="margin-left:auto;color:#374151;font-size:10px;padding-right:4px" id="log-toggle-btn" onclick="toggleLog(); event.stopPropagation()">▲ EXPAND</span>
   </div>
@@ -282,10 +423,13 @@
         <textarea id="msg-text" placeholder="Your message…"></textarea>
         <button class="btn-send" onclick="sendMessage()">SEND</button>
       </div>
-      <div class="msg-section">
-        <div class="msg-section-title">TRADE OFFER</div>
+    </div>
+    <div class="log-pane" id="pane-trade">
+      <!-- Left: trade form -->
+      <div class="trade-col-main">
+        <div style="color:#374151;font-size:9px;letter-spacing:1px;margin-bottom:6px">TRADE OFFER</div>
         <select id="trade-target" class="msg-select"></select>
-        <div style="display:grid; grid-template-columns:1fr 80px 80px; gap:4px 8px; margin-top:8px; align-items:center;">
+        <div style="display:grid; grid-template-columns:1fr 80px 70px; gap:3px 8px; margin-top:6px; align-items:center;">
           <div style="color:#374151; font-family:monospace; font-size:9px; letter-spacing:1px;"></div>
           <div style="color:#4b5563; font-family:monospace; font-size:9px; text-align:center; letter-spacing:1px;">OFFER</div>
           <div style="color:#4b5563; font-family:monospace; font-size:9px; text-align:center; letter-spacing:1px;">REQUEST</div>
@@ -325,11 +469,12 @@
           </div>
           <input type="number" id="trade-req-influence" min="0" value="0" style="background:#0a0d14; border:1px solid #1e2a3a; color:#e5e7eb; font-family:monospace; font-size:10px; padding:3px 6px; border-radius:3px; width:100%;" oninput="updateTradeReadout()">
         </div>
-        <div id="trade-readout" style="color:#6b7280; font-family:monospace; font-size:10px; margin-top:6px; min-height:14px;"></div>
+        <div id="trade-readout" style="color:#6b7280; font-family:monospace; font-size:10px; margin-top:5px; min-height:14px;"></div>
         <button class="msg-send-btn" id="trade-send-btn" onclick="sendTrade()">SEND TRADE</button>
       </div>
-      <div class="msg-section">
-        <div class="msg-section-title">EMBARGOES</div>
+      <!-- Right: embargoes -->
+      <div class="trade-col-side">
+        <div style="color:#374151;font-size:9px;letter-spacing:1px;margin-bottom:6px">EMBARGOES</div>
         <div id="embargo-list"></div>
       </div>
     </div>
@@ -340,6 +485,25 @@
 <div id="overlay" class="hidden">
   <h2 id="overlay-title">LOADING</h2>
   <p id="overlay-body"></p>
+</div>
+
+<!-- NEWSPAPER OVERLAY -->
+<div id="newspaper-overlay" class="hidden">
+  <div id="newspaper">
+    <div id="np-title">The Neon Syndicate Dispatch</div>
+    <div id="np-edition">
+      <span id="np-date">–</span>
+      <span>★ FINAL EDITION ★</span>
+      <span id="np-tick-label">TICK –</span>
+    </div>
+    <div id="np-headline-main">–</div>
+    <div id="np-deck"></div>
+    <hr class="np-rule-thick">
+    <div id="np-subheads"></div>
+    <hr class="np-rule">
+    <div id="np-body"></div>
+    <div id="np-footer">Click anywhere to dismiss &nbsp;·&nbsp; Press Escape</div>
+  </div>
 </div>
 
 <script>
@@ -362,6 +526,12 @@ let nextTickAt = 0;
 let tickIntervalMs = 60000;
 let timerInterval = null;
 let fallbackPollInterval = null;
+let vb = { x: 0, y: 0, w: 1536, h: 1024 };
+let mapDragMoved = false;
+function applyViewBox() {
+  document.getElementById('city-svg').setAttribute('viewBox',
+    `${Math.round(vb.x)} ${Math.round(vb.y)} ${Math.round(vb.w)} ${Math.round(vb.h)}`);
+}
 
 // ── Fetch helpers ──────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
@@ -440,7 +610,7 @@ function getCorporationName() {
 function updateOverlay() {
   if (!worldData) return;
   const overlay = document.getElementById('overlay');
-  if (worldData.corporations.length === 0) {
+  if (!worldData.status || worldData.status === 'none') {
     overlay.classList.remove('hidden');
     document.getElementById('overlay-title').textContent = 'NO ACTIVE SEASON';
     document.getElementById('overlay-body').textContent = 'Ask the admin to create and activate a season.';
@@ -734,31 +904,94 @@ function openSidePanel(districtId) {
   renderSidePanel(districtId);
 }
 
+function clearDistrictHighlights() {
+  // Reset polygon selection class
+  document.querySelectorAll('.district-poly').forEach(p => p.classList.remove('selected'));
+  // Reset border lines to their natural style
+  document.querySelectorAll('.district-border').forEach(line => {
+    const ids = line.dataset.districtIds.split(',');
+    const borderDistricts = ids.map(id => worldData?.districts.find(x => x.id === id)).filter(Boolean);
+    const allOwned = borderDistricts.every(d => d.ownerId);
+    const anyMine  = borderDistricts.some(d => d.ownerId === AGENT_ID);
+    const owned    = borderDistricts.find(d => d.ownerId);
+    const lineColor = owned ? (corpColorMap[owned.ownerId] || '#888') : '#6a9ab8';
+    line.setAttribute('stroke', lineColor);
+    line.setAttribute('stroke-width', anyMine ? '2.5' : '1.5');
+    if (allOwned) line.removeAttribute('stroke-dasharray');
+    else line.setAttribute('stroke-dasharray', '6 4');
+  });
+}
+
 function closeSidePanel() {
   selectedDistrictId = null;
   document.getElementById('side-panel').classList.remove('open');
-  document.querySelectorAll('.district-poly').forEach(p => {
-    p.classList.remove('selected');
-    const d = worldData?.districts.find(x => x.id === p.dataset.districtId);
-    if (d) {
-      const isMine = d.ownerId === AGENT_ID;
-      const isOwned = !!d.ownerId;
-      const color = isOwned ? (corpColorMap[d.ownerId] || '#888') : '#1a2535';
-      p.setAttribute('stroke', isOwned ? color : '#2a3a4a');
-      p.setAttribute('stroke-width', isMine ? 2 : 1);
-    }
-  });
+  clearDistrictHighlights();
 }
 
 document.getElementById('sp-close-btn').addEventListener('click', closeSidePanel);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidePanel(); });
 
-// Click on SVG background closes the side panel
+// Click on SVG background closes the side panel (suppress if pan just ended)
 document.getElementById('city-svg').addEventListener('click', (e) => {
+  if (mapDragMoved) return;
   if (e.target.tagName === 'svg' || e.target.id === 'city-svg') {
     closeSidePanel();
   }
 });
+
+// ── Map pan / zoom ─────────────────────────────────────────────────────────────
+(function () {
+  const svg = document.getElementById('city-svg');
+  let dragging = false, dragStart = null;
+
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+    const rect = svg.getBoundingClientRect();
+    const mx = vb.x + (e.clientX - rect.left) / rect.width  * vb.w;
+    const my = vb.y + (e.clientY - rect.top)  / rect.height * vb.h;
+    const newW = Math.min(1536, Math.max(280, vb.w * factor));
+    const newH = newW * (1024 / 1536);
+    vb.x = Math.max(0, Math.min(1536 - newW, mx - (mx - vb.x) * newW / vb.w));
+    vb.y = Math.max(0, Math.min(1024 - newH, my - (my - vb.y) * newH / vb.h));
+    vb.w = newW; vb.h = newH;
+    applyViewBox();
+  }, { passive: false });
+
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    dragging = true;
+    mapDragMoved = false;
+    dragStart = { x: e.clientX, y: e.clientY, vbx: vb.x, vby: vb.y };
+    svg.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    if (!mapDragMoved && Math.hypot(dx, dy) < 5) return;
+    mapDragMoved = true;
+    const rect = svg.getBoundingClientRect();
+    vb.x = Math.max(0, Math.min(1536 - vb.w, dragStart.vbx - dx / rect.width  * vb.w));
+    vb.y = Math.max(0, Math.min(1024 - vb.h, dragStart.vby - dy / rect.height * vb.h));
+    applyViewBox();
+  });
+
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    svg.style.cursor = 'grab';
+  });
+
+  // Double-click background to reset zoom
+  svg.addEventListener('dblclick', e => {
+    if (mapDragMoved) return;
+    if (e.target.tagName === 'svg' || e.target.tagName === 'image') {
+      vb = { x: 0, y: 0, w: 1536, h: 1024 };
+      applyViewBox();
+    }
+  });
+})();
 
 function renderSidePanel(districtId) {
   const district = worldData?.districts.find(d => d.id === districtId);
@@ -937,35 +1170,44 @@ async function submitFreeAction(freeAction) {
 // Each polygon: [TL, TR, BR, BL]
 
 const DISTRICT_POLYGONS = {
-  "Meridian Park":     [[712,939],[393,708],[5,999],[5,1022],[665,1021],[665,970]],
-  "The Sprawl":        [[390,707],[222,569],[1,687],[5,997]],
-  "Harbor Front":      [[223,567],[287,531],[213,460],[173,482],[128,455],[96,472],[54,436],[8,462],[39,491],[0,506],[1,685]],
-  "Signal Flats":      [[288,532],[449,450],[488,534],[548,579],[393,705],[225,569]],
-  "Ashburn Alley":     [[549,580],[647,642],[506,787],[396,707]],
-  "Eastport Terminal": [[1533,726],[1336,714],[1258,709],[1163,717],[1003,729],[994,1022],[1074,1019],[1073,897],[1173,873],[1319,877],[1490,1022],[1535,1021]],
-  "Portside":          [[991,972],[741,927],[749,607],[1005,609],[1003,725],[1000,731]],
-  "Ember Ward":        [[648,643],[744,681],[738,948],[508,788]],
-  "Data Haven":        [[452,449],[598,372],[672,428],[789,477],[752,519],[751,604],[747,605],[745,679],[648,641],[550,579],[489,533]],
-  "Northgate Hub":     [[215,459],[288,530],[449,447],[422,345],[549,287],[482,225],[566,189],[541,170],[477,153],[454,161],[514,187],[468,204],[405,233],[345,215],[315,225],[386,257],[376,265],[348,252],[321,268],[392,307],[393,341],[370,356],[293,314],[266,331],[352,381],[331,394],[260,351],[241,363],[306,406]],
-  "Neon Row":          [[793,478],[849,409],[972,430],[1007,432],[1005,607],[753,605],[753,520]],
-  "Voltaic Fields":    [[1010,434],[1255,434],[1267,612],[1252,614],[1256,709],[1005,727]],
-  "The Fringe":        [[1257,434],[1535,435],[1534,724],[1257,708],[1254,615],[1270,613]],
-  "The Canopy":        [[1094,432],[1091,282],[1383,289],[1404,433]],
-  "Gridlock":          [[1534,433],[1406,433],[1385,289],[1378,239],[1535,242]],
-  "The Undercroft":    [[851,407],[936,278],[1003,286],[1090,285],[1092,432],[1009,431],[972,428]],
-  "Nexus Core":        [[933,278],[848,407],[790,475],[674,426],[601,371],[788,266]],
-  "Foundry District":  [[545,170],[567,164],[721,163],[771,190],[551,286],[484,225],[568,189]],
-  "Silk Road":         [[424,346],[610,263],[627,355],[451,446]],
-  "Blacksite":         [[1535,238],[1536,161],[1318,153],[1329,286],[1383,287],[1377,237]],
-  "Chrome Quarter":    [[613,263],[629,353],[786,265],[849,269],[866,255],[772,192]],
-  "Capitol Hill":      [[725,162],[897,153],[902,135],[1009,134],[1011,211],[948,199],[868,254],[775,190]],
-  "Veritas Square":    [[1011,136],[1101,140],[1098,280],[1004,283],[935,276],[852,269],[868,256],[948,201],[1013,213]],
-  "Ironworks":         [[1316,154],[1102,140],[1099,280],[1328,286]],
+  "Meridian Park":     [[740,938],[507,788],[393,707],[5,998],[5,1022],[665,1021],[665,970]],
+  "The Sprawl":        [[393,707],[223,568],[1,686],[5,998]],
+  "Harbor Front":      [[223,568],[288,531],[214,460],[173,482],[128,455],[96,472],[54,436],[8,462],[39,491],[0,506],[1,686]],
+  "Signal Flats":      [[288,531],[450,448],[489,534],[549,579],[393,707],[223,568]],
+  "Ashburn Alley":     [[549,579],[648,642],[507,788],[393,707]],
+  "Eastport Terminal": [[1534,725],[1336,714],[1257,709],[1163,717],[1003,728],[994,1022],[1074,1019],[1073,897],[1173,873],[1319,877],[1490,1022],[1535,1021]],
+  "Portside":          [[994,1022],[740,938],[745,680],[750,605],[1005,608],[1003,728],[1003,728]],
+  "Ember Ward":        [[648,642],[745,680],[740,938],[507,788]],
+  "Data Haven":        [[450,448],[628,354],[673,427],[791,477],[753,520],[750,605],[750,605],[745,680],[648,642],[549,579],[489,534]],
+  "Northgate Hub":     [[214,460],[288,531],[450,448],[423,346],[550,287],[483,225],[567,189],[567,164],[543,170],[477,153],[454,161],[514,187],[468,204],[405,233],[345,215],[315,225],[386,257],[376,265],[348,252],[321,268],[392,307],[393,341],[370,356],[293,314],[266,331],[352,381],[331,394],[260,351],[241,363],[306,406]],
+  "Neon Row":          [[791,477],[849,408],[972,429],[1009,432],[1005,608],[750,605],[753,520]],
+  "Voltaic Fields":    [[1009,432],[1093,432],[1256,434],[1261,614],[1261,614],[1257,709],[1163,717],[1003,728],[1005,608]],
+  "The Fringe":        [[1256,434],[1405,433],[1535,434],[1534,725],[1336,714],[1257,709],[1261,614],[1261,614]],
+  "The Canopy":        [[1093,432],[1095,282],[1329,286],[1384,288],[1405,433],[1256,434]],
+  "Gridlock":          [[1535,434],[1405,433],[1384,288],[1378,238],[1535,240]],
+  "The Undercroft":    [[849,408],[935,277],[1004,285],[1095,282],[1093,432],[1009,432],[972,429]],
+  "Nexus Core":        [[935,277],[849,408],[791,477],[673,427],[628,354],[787,266],[861,261]],
+  "Foundry District":  [[543,170],[567,164],[723,163],[773,191],[612,263],[550,287],[483,225],[567,189]],
+  "Silk Road":         [[423,346],[550,287],[612,263],[628,354],[450,448]],
+  "Blacksite":         [[1535,240],[1536,161],[1317,154],[1329,286],[1384,288],[1378,238]],
+  "Chrome Quarter":    [[612,263],[628,354],[787,266],[861,261],[861,261],[773,191]],
+  "Capitol Hill":      [[723,163],[897,153],[902,135],[1010,135],[1012,212],[948,200],[861,261],[773,191]],
+  "Veritas Square":    [[1010,135],[1102,140],[1095,282],[1004,285],[935,277],[861,261],[861,261],[948,200],[1012,212]],
+  "Ironworks":         [[1317,154],[1102,140],[1095,282],[1329,286]],
 };
 
 const DISTRICT_ICONS = {
   power_grid:'⚡', financial_hub:'💰', labor_zone:'👷',
   data_center:'🔍', black_market:'🎭', government_quarter:'🏛'
+};
+
+const DISTRICT_DESCRIPTIONS = {
+  power_grid:         'Controls the city\'s electrical infrastructure. Owning this district boosts energy production for your operations.',
+  financial_hub:      'A dense cluster of banks, exchanges, and corporate vaults. Essential for generating credits and financing expansion.',
+  labor_zone:         'Warehouses and factories staffed by thousands of workers. The backbone of any industrial operation.',
+  data_center:        'Server farms and surveillance nodes. Intelligence gathered here is invaluable for covert operations.',
+  black_market:       'Underground trade networks and shadow brokers. A dangerous district, but influence runs deep here.',
+  government_quarter: 'The seat of political power. Controlling this district shapes law and tilts public policy in your favor.',
 };
 
 function pointsStr(coords) {
@@ -995,15 +1237,15 @@ function renderMap() {
   districts.forEach(d => { districtById[d.id] = d; });
 
   // Draw adjacency lines beneath polygons
-  const drawnEdges = new Set();
+  const drawnAdjEdges = new Set();
   districts.forEach(d => {
     const coords = DISTRICT_POLYGONS[d.name];
     if (!coords) return;
     const [cx, cy] = centroid(coords);
     (d.adjacentIds || []).forEach(adjId => {
       const edgeKey = [d.id, adjId].sort().join('|');
-      if (drawnEdges.has(edgeKey)) return;
-      drawnEdges.add(edgeKey);
+      if (drawnAdjEdges.has(edgeKey)) return;
+      drawnAdjEdges.add(edgeKey);
       const adj = districtById[adjId];
       if (!adj) return;
       const adjCoords = DISTRICT_POLYGONS[adj.name];
@@ -1018,64 +1260,48 @@ function renderMap() {
     });
   });
 
-  // Draw polygons
+  // Draw polygons — fill only, no stroke (borders drawn separately below)
   districts.forEach(d => {
     const coords = DISTRICT_POLYGONS[d.name];
     if (!coords) return;
 
     const isMine   = d.ownerId === AGENT_ID;
     const isOwned  = !!d.ownerId;
-    const color    = isOwned ? (corpColorMap[d.ownerId] || '#888') : '#1a2535';
-    const strokeColor = isOwned ? color : '#2a3a4a';
-    const fillOpacity = isMine ? 0.35 : (isOwned ? 0.2 : 0.8);
+    const color    = isOwned ? (corpColorMap[d.ownerId] || '#888') : '#7aaec8';
+    const fillOpacity = isMine ? 0.4 : (isOwned ? 0.28 : 0.07);
 
     const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     poly.setAttribute('points', pointsStr(coords));
     poly.setAttribute('fill', color);
     poly.setAttribute('fill-opacity', fillOpacity);
-    poly.setAttribute('stroke', strokeColor);
-    poly.setAttribute('stroke-width', isMine ? 2 : 1);
+    poly.setAttribute('stroke', 'none');
     poly.setAttribute('class', 'district-poly');
     poly.dataset.districtId = d.id;
     poly.style.cursor = 'pointer';
-    poly.style.transition = 'fill-opacity 0.4s, stroke 0.4s';
+    poly.style.transition = 'fill-opacity 0.4s';
 
-    // Dashed border for unowned districts; solid for owned
-    if (!d.ownerId) {
-      poly.setAttribute('stroke-dasharray', '4 3');
-    } else {
-      poly.setAttribute('stroke-dasharray', 'none');
-    }
-
-    // Pulse animation for player-owned districts
-    if (isMine) {
-      poly.classList.add('mine-district');
-    } else {
-      poly.classList.remove('mine-district');
-    }
+    if (isMine) poly.classList.add('mine-district');
 
     poly.addEventListener('mouseenter', () => {
       if (selectedDistrictId !== d.id) poly.setAttribute('fill-opacity', 0.6);
       showTooltip(d);
     });
     poly.addEventListener('mouseleave', () => {
-      if (selectedDistrictId !== d.id) poly.setAttribute('fill-opacity', fillOpacity);
+      poly.setAttribute('fill-opacity', fillOpacity);
       hideTooltip();
     });
     poly.addEventListener('click', () => {
-      // Reset previous selection
-      document.querySelectorAll('.district-poly').forEach(p => {
-        p.classList.remove('selected');
-        const prev = districtById[p.dataset.districtId];
-        if (prev) {
-          const prevColor = prev.ownerId ? (corpColorMap[prev.ownerId] || '#888') : '#2a3a4a';
-          p.setAttribute('stroke', prevColor);
-          p.setAttribute('stroke-width', prev.ownerId === AGENT_ID ? 2 : 1);
+      if (mapDragMoved) return;
+      clearDistrictHighlights();
+      poly.classList.add('selected');
+      // Highlight this district's border lines
+      document.querySelectorAll('.district-border').forEach(line => {
+        if (line.dataset.districtIds.split(',').includes(d.id)) {
+          line.setAttribute('stroke', '#fff');
+          line.setAttribute('stroke-width', '3');
+          line.removeAttribute('stroke-dasharray');
         }
       });
-      poly.classList.add('selected');
-      poly.setAttribute('stroke', '#fff');
-      poly.setAttribute('stroke-width', 3);
       openSidePanel(d.id);
     });
 
@@ -1092,6 +1318,55 @@ function renderMap() {
     icon.textContent = DISTRICT_ICONS[d.type] || '?';
     svg.appendChild(icon);
   });
+
+  // Build edge map: each unique polygon edge drawn exactly once
+  // Key is the canonical (smaller-point-first) vertex pair so both polygons
+  // sharing an edge produce the same key.
+  const edgeMap = new Map();
+  districts.forEach(d => {
+    const coords = DISTRICT_POLYGONS[d.name];
+    if (!coords) return;
+    for (let i = 0; i < coords.length; i++) {
+      const [x1, y1] = coords[i];
+      const [x2, y2] = coords[(i + 1) % coords.length];
+      const fwd = x1 < x2 || (x1 === x2 && y1 < y2);
+      const key = fwd ? `${x1},${y1}|${x2},${y2}` : `${x2},${y2}|${x1},${y1}`;
+      if (!edgeMap.has(key)) {
+        edgeMap.set(key, { x1: fwd?x1:x2, y1: fwd?y1:y2, x2: fwd?x2:x1, y2: fwd?y2:y1, districts: [] });
+      }
+      edgeMap.get(key).districts.push(d);
+    }
+  });
+
+  // Draw each unique edge as a single <line>
+  edgeMap.forEach(({ x1, y1, x2, y2, districts: borderDistricts }) => {
+    const allOwned = borderDistricts.every(d => d.ownerId);
+    const anyMine  = borderDistricts.some(d => d.ownerId === AGENT_ID);
+    const owned    = borderDistricts.find(d => d.ownerId);
+    const lineColor = owned ? (corpColorMap[owned.ownerId] || '#888') : '#6a9ab8';
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', lineColor);
+    line.setAttribute('stroke-width', anyMine ? '2.5' : '1.5');
+    if (!allOwned) line.setAttribute('stroke-dasharray', '6 4');
+    line.setAttribute('pointer-events', 'none');
+    line.setAttribute('class', 'district-border');
+    line.dataset.districtIds = borderDistricts.map(d => d.id).join(',');
+    svg.appendChild(line);
+  });
+
+  // Re-apply selection highlight on borders after re-render
+  if (selectedDistrictId) {
+    document.querySelectorAll('.district-border').forEach(line => {
+      if (line.dataset.districtIds.split(',').includes(selectedDistrictId)) {
+        line.setAttribute('stroke', '#fff');
+        line.setAttribute('stroke-width', '3');
+        line.removeAttribute('stroke-dasharray');
+      }
+    });
+  }
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
@@ -1119,6 +1394,46 @@ function hideTooltip() {
   document.removeEventListener('mousemove', moveTooltip);
 }
 
+// ── Newspaper ──────────────────────────────────────────────────────────────────
+function showNewspaper(b) {
+  if (!b || b.generating) return;
+  const headlines = b.headlines || [];
+  const events    = b.events   || [];
+
+  // Main headline: first headline or first event or fallback
+  const mainHeadline = headlines[0] || events[0] || 'The city holds its breath.';
+  // Deck (subhead under main headline): second headline if available
+  const deck = headlines[1] || '';
+  // Remaining headlines for the column below
+  const subheads = headlines.slice(deck ? 2 : 1);
+
+  document.getElementById('np-headline-main').textContent = mainHeadline;
+  document.getElementById('np-deck').textContent = deck;
+  document.getElementById('np-tick-label').textContent = `TICK ${b.tick ?? '–'}`;
+  document.getElementById('np-date').textContent =
+    new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }).toUpperCase();
+
+  document.getElementById('np-subheads').innerHTML =
+    subheads.map(h => `<div class="np-subhead">${h}</div>`).join('');
+
+  document.getElementById('np-body').textContent = b.narrative || '';
+
+  // Re-trigger spin animation on each show
+  const np = document.getElementById('newspaper');
+  np.style.animation = 'none';
+  np.offsetHeight; // force reflow
+  np.style.animation = '';
+
+  document.getElementById('newspaper-overlay').classList.remove('hidden');
+}
+
+function hideNewspaper() {
+  document.getElementById('newspaper-overlay').classList.add('hidden');
+}
+
+document.getElementById('newspaper-overlay').addEventListener('click', hideNewspaper);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideNewspaper(); });
+
 // ── WebSocket ──────────────────────────────────────────────────────────────────
 let ws = null;
 let wsRetryTimeout = null;
@@ -1142,6 +1457,7 @@ function connectWs() {
         if (msg.nextTickAt) startTimer(msg.nextTickAt);
         await loadWorld();
         await loadBriefing();
+        showNewspaper(briefing);
         // Flash log tab bar border briefly
         document.getElementById('log-tab-bar').style.borderTopColor = '#00f5c4';
         setTimeout(() => { document.getElementById('log-tab-bar').style.borderTopColor = ''; }, 800);
@@ -1175,5 +1491,6 @@ function esc(str) {
   connectWs();
 })();
 </script>
+
 </body>
 </html>

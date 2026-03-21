@@ -131,10 +131,19 @@
     const apiKey  = localStorage.getItem('ns_api_key');
     if (!agentId || !apiKey) return;
     try {
-      const res = await fetch(`/briefing/${agentId}`, {
-        headers: { Authorization: `Bearer ${apiKey}` }
-      });
-      if (res.ok) { window.location.href = '/game'; }
+      // Verify credentials are valid AND corp is in the current active season
+      const [briefRes, worldRes] = await Promise.all([
+        fetch(`/briefing/${agentId}`, { headers: { Authorization: `Bearer ${apiKey}` } }),
+        fetch('/world'),
+      ]);
+      if (!briefRes.ok) { localStorage.clear(); return; }
+      if (worldRes.ok) {
+        const world = await worldRes.json();
+        const seasonActive = world.status === 'active' || world.status === 'pending';
+        const inCurrentSeason = world.corporations.some(c => c.id === agentId);
+        if (!seasonActive || !inCurrentSeason) { localStorage.clear(); return; }
+      }
+      window.location.href = '/game';
     } catch (_) { /* ignore — server may be starting */ }
   })();
 

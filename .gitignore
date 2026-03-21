@@ -1,4 +1,7 @@
 node_modules/
+neon.db
+neon.db-shm
+neon.db-wal
 dist/
 build/
 .env

@@ -7,35 +7,56 @@ function uuidv4() {
   return crypto.randomUUID();
 }
 
-// 24 districts arranged in a 6x4 grid. Adjacency = left/right/up/down (no diagonals).
-const GRID_COLS = 6;
-const GRID_ROWS = 4;
-
+// 24 districts with geographic adjacency matching the traced city map polygons.
 const DISTRICT_NAMES = [
-  'Northgate', 'Chrome Quarter', 'Data Row', 'Midtown', 'Neon Strip', 'East Docks',
-  'The Sprawl', 'Ironworks', 'Government Hill', 'Shadowmarket', 'Westside', 'Harbor Gate',
-  'Undervault', 'Power Station Alpha', 'Labor Yards', 'Synapse Hub', 'Old Town', 'Redline',
-  'Blacksite', 'The Exchange', 'Southgate', 'Circuit Row', 'Power Station Beta', 'Deep Market',
+  'Meridian Park', 'The Sprawl',     'Harbor Front',    'Signal Flats',
+  'Ashburn Alley', 'Eastport Terminal', 'Portside',     'Ember Ward',
+  'Data Haven',    'Northgate Hub',  'Neon Row',        'Voltaic Fields',
+  'The Fringe',    'The Canopy',     'Gridlock',        'The Undercroft',
+  'Nexus Core',    'Foundry District', 'Silk Road',     'Blacksite',
+  'Chrome Quarter','Capitol Hill',   'Veritas Square',  'Ironworks',
 ];
 
-// 24 types matching spec: 4 data_center, 5 power_grid, 5 labor_zone,
-// 5 financial_hub, 4 black_market, 1 government_quarter
+// Types: 4 data_center, 5 power_grid, 5 labor_zone, 5 financial_hub, 4 black_market, 1 government_quarter
 const DISTRICT_TYPES = [
-  'data_center',       'power_grid',    'labor_zone',    'financial_hub', 'black_market',    'government_quarter',
-  'data_center',       'power_grid',    'labor_zone',    'financial_hub', 'black_market',    'power_grid',
-  'labor_zone',        'financial_hub', 'black_market',  'data_center',   'power_grid',      'labor_zone',
-  'financial_hub',     'black_market',  'data_center',   'power_grid',    'labor_zone',      'financial_hub',
+  'labor_zone',      'black_market',    'financial_hub',   'data_center',
+  'black_market',    'financial_hub',   'labor_zone',      'power_grid',
+  'data_center',     'labor_zone',      'power_grid',      'financial_hub',
+  'black_market',    'power_grid',      'data_center',     'labor_zone',
+  'government_quarter', 'power_grid',   'financial_hub',   'black_market',
+  'data_center',     'financial_hub',   'labor_zone',      'power_grid',
 ];
 
-function getGridNeighbors(index) {
-  const row = Math.floor(index / GRID_COLS);
-  const col = index % GRID_COLS;
-  const neighbors = [];
-  if (col > 0) neighbors.push(index - 1);
-  if (col < GRID_COLS - 1) neighbors.push(index + 1);
-  if (row > 0) neighbors.push(index - GRID_COLS);
-  if (row < GRID_ROWS - 1) neighbors.push(index + GRID_COLS);
-  return neighbors;
+// Geographic adjacency based on traced polygon layout
+const DISTRICT_ADJACENCY = {
+  'Meridian Park':    ['The Sprawl', 'Signal Flats', 'Ashburn Alley', 'Ember Ward', 'Portside'],
+  'The Sprawl':       ['Harbor Front', 'Signal Flats', 'Meridian Park'],
+  'Harbor Front':     ['Northgate Hub', 'Signal Flats', 'The Sprawl'],
+  'Signal Flats':     ['Harbor Front', 'Northgate Hub', 'Data Haven', 'Ashburn Alley', 'Meridian Park', 'The Sprawl'],
+  'Ashburn Alley':    ['Signal Flats', 'Data Haven', 'Ember Ward', 'Meridian Park'],
+  'Eastport Terminal':['Portside', 'Voltaic Fields', 'The Fringe'],
+  'Portside':         ['Meridian Park', 'Ember Ward', 'Neon Row', 'Voltaic Fields', 'Eastport Terminal'],
+  'Ember Ward':       ['Ashburn Alley', 'Data Haven', 'Neon Row', 'Portside', 'Meridian Park'],
+  'Data Haven':       ['Northgate Hub', 'Signal Flats', 'Silk Road', 'Nexus Core', 'Neon Row', 'Ember Ward', 'Ashburn Alley'],
+  'Northgate Hub':    ['Harbor Front', 'Signal Flats', 'Data Haven', 'Silk Road', 'Foundry District'],
+  'Neon Row':         ['Data Haven', 'Nexus Core', 'The Undercroft', 'Voltaic Fields', 'Portside', 'Ember Ward'],
+  'Voltaic Fields':   ['Neon Row', 'The Undercroft', 'The Canopy', 'The Fringe', 'Portside', 'Eastport Terminal'],
+  'The Fringe':       ['Gridlock', 'The Canopy', 'Voltaic Fields', 'Eastport Terminal'],
+  'The Canopy':       ['Veritas Square', 'Ironworks', 'Gridlock', 'The Undercroft', 'Voltaic Fields'],
+  'Gridlock':         ['Ironworks', 'Blacksite', 'The Canopy', 'The Fringe'],
+  'The Undercroft':   ['Nexus Core', 'Veritas Square', 'The Canopy', 'Neon Row', 'Voltaic Fields'],
+  'Nexus Core':       ['Silk Road', 'Chrome Quarter', 'Capitol Hill', 'Veritas Square', 'The Undercroft', 'Neon Row', 'Data Haven'],
+  'Foundry District': ['Northgate Hub', 'Chrome Quarter', 'Capitol Hill'],
+  'Silk Road':        ['Northgate Hub', 'Data Haven', 'Chrome Quarter', 'Nexus Core'],
+  'Blacksite':        ['Ironworks', 'Gridlock'],
+  'Chrome Quarter':   ['Foundry District', 'Silk Road', 'Nexus Core', 'Capitol Hill'],
+  'Capitol Hill':     ['Foundry District', 'Chrome Quarter', 'Nexus Core', 'Veritas Square'],
+  'Veritas Square':   ['Capitol Hill', 'Nexus Core', 'The Undercroft', 'Ironworks', 'The Canopy'],
+  'Ironworks':        ['Veritas Square', 'The Canopy', 'Blacksite', 'Gridlock'],
+};
+
+function getGeographicNeighbors(name, allNames) {
+  return (DISTRICT_ADJACENCY[name] || []).map(n => allNames.indexOf(n)).filter(i => i >= 0);
 }
 
 function createSeason(db, options = {}) {
@@ -86,7 +107,7 @@ function createDistrictMap(db, seasonId) {
 
   conn.transaction(() => {
     for (let i = 0; i < 24; i++) {
-      const neighborIds = getGridNeighbors(i).map(ni => ids[ni]);
+      const neighborIds = getGeographicNeighbors(DISTRICT_NAMES[i], DISTRICT_NAMES).map(ni => ids[ni]);
       insert.run(ids[i], seasonId, DISTRICT_NAMES[i], DISTRICT_TYPES[i], JSON.stringify(neighborIds));
     }
   })();
