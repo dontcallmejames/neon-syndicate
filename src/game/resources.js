@@ -2,12 +2,12 @@
 const { getDb } = require('../db/index');
 
 const PRODUCTION = {
-  data_center:        { intelligence: 3 },
-  power_grid:         { energy: 4 },
-  labor_zone:         { workforce: 3 },
-  financial_hub:      { credits: 4 },
-  black_market:       { influence: 2, reputation: -2 },
-  government_quarter: { political_power: 3 },
+  data_center:        { intelligence: 3, credits: 1 },
+  power_grid:         { energy: 4, workforce: 1 },
+  labor_zone:         { workforce: 3, credits: 1 },
+  financial_hub:      { credits: 4, energy: 1 },
+  black_market:       { influence: 2, credits: 2, reputation: -1 },
+  government_quarter: { political_power: 3, influence: 1, reputation: 1 },
 };
 
 const RESOURCE_KEYS = ['credits', 'energy', 'workforce', 'intelligence', 'influence', 'political_power'];
