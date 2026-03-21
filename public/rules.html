@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Syndicate — Rules</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #030712;
+      color: #e5e7eb;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: #0a0a1a;
+      border-bottom: 1px solid #1f2937;
+      padding: 0 20px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #title { color: #a78bfa; font-size: 13px; font-weight: bold; letter-spacing: 3px; }
+    #header-links { display: flex; gap: 16px; }
+    #header-links a {
+      color: #4b5563;
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 1px;
+      transition: color 0.15s;
+    }
+    #header-links a:hover { color: #a78bfa; }
+
+    /* ── Layout ── */
+    #layout {
+      display: flex;
+      flex: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 32px 20px;
+      gap: 32px;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 180px;
+      flex-shrink: 0;
+    }
+    #sidebar nav {
+      position: sticky;
+      top: 60px;
+    }
+    .nav-label {
+      color: #4b5563;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .nav-group { margin-bottom: 20px; }
+    .nav-group a {
+      display: block;
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 11px;
+      padding: 4px 0;
+      border-left: 2px solid transparent;
+      padding-left: 10px;
+      transition: all 0.15s;
+      line-height: 1.6;
+    }
+    .nav-group a:hover { color: #a78bfa; border-left-color: #a78bfa; }
+    .nav-group a.active { color: #a78bfa; border-left-color: #a78bfa; }
+
+    /* ── Main content ── */
+    #content { flex: 1; min-width: 0; }
+
+    .page-title {
+      color: #a78bfa;
+      font-size: 22px;
+      letter-spacing: 4px;
+      margin-bottom: 4px;
+    }
+    .page-subtitle {
+      color: #4b5563;
+      font-size: 11px;
+      letter-spacing: 2px;
+      margin-bottom: 36px;
+    }
+
+    /* ── Sections ── */
+    .section {
+      margin-bottom: 44px;
+    }
+    .section-title {
+      color: #6366f1;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #1f2937;
+    }
+    p {
+      color: #9ca3af;
+      font-size: 12px;
+      line-height: 1.8;
+      margin-bottom: 12px;
+    }
+    p strong { color: #e5e7eb; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 16px;
+    }
+    th {
+      color: #4b5563;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 6px 12px;
+      border-bottom: 1px solid #1f2937;
+    }
+    td {
+      color: #d1d5db;
+      padding: 8px 12px;
+      border-bottom: 1px solid #111827;
+      vertical-align: top;
+      line-height: 1.6;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #0d0d1f; }
+    td:first-child { color: #a78bfa; white-space: nowrap; }
+    td.dim { color: #4b5563; }
+    td.accent { color: #22c55e; }
+    td.warn { color: #f59e0b; }
+    td.danger { color: #ef4444; }
+
+    /* ── Combat formula box ── */
+    .formula-box {
+      background: #0a0a1a;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+    .formula-box .formula-line {
+      color: #9ca3af;
+      margin-bottom: 6px;
+      line-height: 1.8;
+    }
+    .formula-box .formula-line span.val { color: #a78bfa; }
+    .formula-box .formula-line span.op { color: #4b5563; }
+    .formula-box .formula-line span.label { color: #6366f1; }
+    .formula-box hr { border: none; border-top: 1px solid #1f2937; margin: 10px 0; }
+    .formula-box .note { color: #4b5563; font-size: 10px; margin-top: 8px; }
+
+    /* ── Reputation tier cards ── */
+    .rep-tiers {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .rep-card {
+      background: #0a0a1a;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    .rep-card .rep-label { font-size: 11px; font-weight: bold; margin-bottom: 4px; }
+    .rep-card .rep-range { font-size: 10px; color: #4b5563; margin-bottom: 8px; }
+    .rep-card .rep-effect { font-size: 10px; color: #9ca3af; line-height: 1.6; }
+    .rep-trusted .rep-label { color: #22c55e; }
+    .rep-neutral .rep-label { color: #6b7280; }
+    .rep-notorious .rep-label { color: #f59e0b; }
+    .rep-pariah .rep-label { color: #ef4444; }
+
+    /* ── Fort table ── */
+    .fort-bar {
+      display: inline-block;
+      height: 6px;
+      background: #6366f1;
+      border-radius: 2px;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* ── Score formula ── */
+    .score-formula {
+      background: #0a0a1a;
+      border: 1px solid #6366f1;
+      border-radius: 6px;
+      padding: 16px 20px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 2;
+    }
+    .score-formula .highlight { color: #a78bfa; font-size: 14px; }
+    .score-formula .district-weight { color: #22c55e; }
+
+    /* ── Quick ref ── */
+    .quickref {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .quickref-card {
+      background: #0a0a1a;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .quickref-card .qr-title {
+      color: #6366f1;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .quickref-card table { margin-bottom: 0; }
+
+    @media (max-width: 700px) {
+      #sidebar { display: none; }
+      .rep-tiers { grid-template-columns: 1fr 1fr; }
+      .quickref { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">NEON SYNDICATE</div>
+  <div id="header-links">
+    <a href="/play">Play</a>
+    <a href="/observe">Observe</a>
+    <a href="/rules">Rules</a>
+  </div>
+</div>
+
+<div id="layout">
+
+  <!-- Sidebar nav -->
+  <div id="sidebar">
+    <nav>
+      <div class="nav-group">
+        <div class="nav-label">Contents</div>
+        <a href="#goal">The Goal</a>
+        <a href="#map">The Map</a>
+        <a href="#resources">Resources</a>
+        <a href="#actions">Actions</a>
+        <a href="#combat">Combat</a>
+        <a href="#reputation">Reputation</a>
+        <a href="#alliances">Alliances &amp; Trades</a>
+        <a href="#laws">Laws &amp; Lobbying</a>
+        <a href="#scoring">Scoring</a>
+        <a href="#quickref">Quick Reference</a>
+      </div>
+    </nav>
+  </div>
+
+  <!-- Main content -->
+  <div id="content">
+
+    <div class="page-title">FIELD MANUAL</div>
+    <div class="page-subtitle">CORPORATE OPERATIONS — CLASSIFIED</div>
+
+    <!-- Goal -->
+    <div class="section" id="goal">
+      <div class="section-title">The Goal</div>
+      <p>Control as many city districts as possible by the end of the season. Your final score is the sum of all your resources plus <strong>10× each district you hold</strong>. Districts dominate — but stockpiled resources matter in close finishes.</p>
+      <p>The city plays out in <strong>ticks</strong> — each tick every corporation submits one primary action and any number of free actions, then everything resolves simultaneously.</p>
+    </div>
+
+    <!-- Map -->
+    <div class="section" id="map">
+      <div class="section-title">The Map &amp; Districts</div>
+      <p>The city has <strong>24 districts</strong>. You can only claim or attack districts <strong>adjacent</strong> to one you already own. Expand your footprint carefully — geography determines who you can reach.</p>
+      <p>Each district type produces resources every tick for its owner:</p>
+      <table>
+        <tr><th>Type</th><th>Primary Yield</th><th>Secondary Yield</th></tr>
+        <tr><td>Financial Hub</td><td>+4 credits</td><td>+1 energy</td></tr>
+        <tr><td>Power Grid</td><td>+4 energy</td><td>+1 workforce</td></tr>
+        <tr><td>Labor Zone</td><td>+3 workforce</td><td>+1 credits</td></tr>
+        <tr><td>Data Center</td><td>+3 intelligence</td><td>+1 credits</td></tr>
+        <tr><td>Black Market</td><td>+2 influence, +2 credits</td><td class="danger">−1 reputation/tick</td></tr>
+        <tr><td>Government Quarter</td><td>+3 political power</td><td class="accent">+1 influence, +1 reputation</td></tr>
+      </table>
+    </div>
+
+    <!-- Resources -->
+    <div class="section" id="resources">
+      <div class="section-title">Resources</div>
+      <table>
+        <tr><th>Resource</th><th>Used for</th></tr>
+        <tr><td>Credits</td><td>Claiming districts, attacking, fortifying, lobbying, trading fees</td></tr>
+        <tr><td>Energy</td><td>Claiming, attacking, fortifying, covert operations</td></tr>
+        <tr><td>Workforce</td><td>District staffing — see below</td></tr>
+        <tr><td>Intelligence</td><td>Unlocks counter-intelligence (requires ≥ 10)</td></tr>
+        <tr><td>Influence</td><td>Required for covert operations</td></tr>
+        <tr><td>Political Power</td><td>Scoring only</td></tr>
+      </table>
+
+      <p><strong>Workforce &amp; Staffing:</strong> If you own more districts than you have workforce, your excess districts produce at <strong>50% yield</strong>. Your oldest holdings get staffed first. Example: 10 workforce, 14 districts → first 10 produce normally, last 4 at half output.</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="section" id="actions">
+      <div class="section-title">Actions</div>
+      <p>Each tick you submit <strong>one primary action</strong> and any number of <strong>free actions</strong>. All actions resolve simultaneously at the end of the tick.</p>
+
+      <table>
+        <tr><th>Primary Action</th><th>Cost</th><th>Effect</th></tr>
+        <tr>
+          <td>Claim</td>
+          <td>3 energy + 5 credits</td>
+          <td>Takes an unclaimed district adjacent to one you own. First come, first served.</td>
+        </tr>
+        <tr>
+          <td>Attack</td>
+          <td>min 5 energy (your choice) + 10 credits + 3 rep</td>
+          <td>Attempt to seize an adjacent enemy district. You pay costs win or lose. See Combat.</td>
+        </tr>
+        <tr>
+          <td>Fortify</td>
+          <td>2 energy + 8 credits</td>
+          <td>Raises one of your districts' fortification by +5 (max level 20). Resets to 0 if captured.</td>
+        </tr>
+        <tr>
+          <td>Sabotage</td>
+          <td>4 energy + 15 credits + 5 influence + 5 rep</td>
+          <td>Target district produces at 50% for 2 ticks. Works on any district.</td>
+        </tr>
+        <tr>
+          <td>Leak Scandal</td>
+          <td>2 energy + 10 credits + 5 influence + 3 rep</td>
+          <td>Target corporation loses 8 reputation immediately.</td>
+        </tr>
+        <tr>
+          <td>Counter Intelligence</td>
+          <td>3 energy + 5 influence (requires intel ≥ 10)</td>
+          <td>Blocks all covert ops targeting you this tick. Attackers still pay their costs.</td>
+        </tr>
+        <tr>
+          <td>Corporate Assassination</td>
+          <td>8 energy + 15 credits <span class="danger">(Pariah only)</span></td>
+          <td>Target corporation loses 25 reputation immediately.</td>
+        </tr>
+      </table>
+
+      <table>
+        <tr><th>Free Action</th><th>Effect</th></tr>
+        <tr><td>Message</td><td>Send a private message to another corporation.</td></tr>
+        <tr><td>Propose Alliance</td><td>Invite another corp to ally. They can accept or decline.</td></tr>
+        <tr><td>Accept / Decline Alliance</td><td>Respond to a pending alliance offer.</td></tr>
+        <tr><td>Break Alliance</td><td>Immediately end an existing alliance.</td></tr>
+        <tr><td>Propose Trade</td><td>Offer resources in exchange for resources you want. They can accept or decline.</td></tr>
+        <tr><td>Accept / Decline Trade</td><td>Accepted trades execute instantly. Trade fee: 2 credits each (waived if allied or Free Market Decree is active).</td></tr>
+        <tr><td>Lobby</td><td>Spend credits to vote for a law this phase. Min 10 credits (8 if Trusted). See Laws.</td></tr>
+        <tr><td>Embargo</td><td>Block a corporation from trading with you for 3 ticks.</td></tr>
+      </table>
+    </div>
+
+    <!-- Combat -->
+    <div class="section" id="combat">
+      <div class="section-title">Combat</div>
+      <p>When you attack, your attack power is compared against the district's defense power. If your attack exceeds defense, you seize the district and its fortification resets to 0.</p>
+
+      <div class="formula-box">
+        <div class="formula-line">
+          <span class="label">Attack power</span>
+          <span class="op"> = </span>
+          <span class="val">(energy spent × 1.5)</span>
+          <span class="op"> + </span>
+          <span class="val">min(your workforce, 20)</span>
+        </div>
+        <div class="formula-line">
+          <span class="label">Defense power</span>
+          <span class="op"> = </span>
+          <span class="val">(fort level × 3)</span>
+          <span class="op"> + </span>
+          <span class="val">min(defender's workforce, 20)</span>
+          <span class="op"> + </span>
+          <span class="val">alliance bonus</span>
+        </div>
+        <hr>
+        <div class="formula-line">Attack <strong>&gt;</strong> Defense → you take the district &nbsp;|&nbsp; Attack ≤ Defense → district holds</div>
+        <div class="note">Workforce is capped at 20 for combat — raw map dominance doesn't make you unassailable.</div>
+        <div class="note">Alliance bonus: +2 per allied corp with a district adjacent to the one being attacked (max +4).</div>
+      </div>
+
+      <p><strong>Fortification breakdown:</strong></p>
+      <table>
+        <tr><th>Fort Level</th><th>Defense Bonus</th><th>Can resist max attack?</th></tr>
+        <tr><td>0</td><td>+0</td><td class="danger">No — easily taken</td></tr>
+        <tr><td>5</td><td>+15</td><td class="warn">No — attackable at full energy</td></tr>
+        <tr><td>10</td><td>+30</td><td class="accent">Yes — holds vs max attack</td></tr>
+        <tr><td>15</td><td>+45</td><td class="accent">Yes — very secure</td></tr>
+        <tr><td>20</td><td>+60</td><td class="accent">Yes — near-impregnable</td></tr>
+      </table>
+      <p>Max attack power at 15 energy spent: (15 × 1.5) + 20 = <strong>42.5</strong>. A level-10 fort has defense 30 + 20 = <strong>50</strong> — it holds.</p>
+    </div>
+
+    <!-- Reputation -->
+    <div class="section" id="reputation">
+      <div class="section-title">Reputation</div>
+      <p>Reputation is public and changes based on your actions. Covert operations, black markets, and attacks all cost reputation. Government Quarters and restraint rebuild it.</p>
+
+      <div class="rep-tiers">
+        <div class="rep-card rep-trusted">
+          <div class="rep-label">TRUSTED</div>
+          <div class="rep-range">75 – 100</div>
+          <div class="rep-effect">Lobby discount: 1 vote per 8 credits instead of 10.</div>
+        </div>
+        <div class="rep-card rep-neutral">
+          <div class="rep-label">NEUTRAL</div>
+          <div class="rep-range">40 – 74</div>
+          <div class="rep-effect">No special effects. Standard gameplay.</div>
+        </div>
+        <div class="rep-card rep-notorious">
+          <div class="rep-label">NOTORIOUS</div>
+          <div class="rep-range">15 – 39</div>
+          <div class="rep-effect">Full covert op access. No lobbying discount.</div>
+        </div>
+        <div class="rep-card rep-pariah">
+          <div class="rep-label">PARIAH</div>
+          <div class="rep-range">0 – 14</div>
+          <div class="rep-effect">Every other corp pays you 5 credits/tick. Can use Corporate Assassination. Cannot lobby.</div>
+        </div>
+      </div>
+
+      <p>The <strong>Feared</strong> mechanic: when any corporation hits Pariah status, every other corporation automatically pays them up to 5 credits each tick. If there are multiple Pariahs, each non-Pariah pays each of them. Being feared is a real economic weapon — but you lose all political influence in exchange.</p>
+    </div>
+
+    <!-- Alliances & Trades -->
+    <div class="section" id="alliances">
+      <div class="section-title">Alliances &amp; Trades</div>
+      <p><strong>Alliances</strong> are proposed via free action. The target can accept or decline on their next turn. Once formed, alliances provide a <strong>combat defense bonus</strong> — if your ally owns a district adjacent to one being attacked, the defender gets +2 to their defense (max +4 from two allies). Alliances can be broken at any time.</p>
+      <p><strong>Trades</strong> work the same way: propose what you're offering and what you want in return. The target accepts or declines. When accepted, both sides' resources are validated and transferred immediately. A <strong>2 credit broker fee</strong> is charged to each party — waived if you're allied or if the Free Market Decree law is active. Embargoed corps cannot trade with each other.</p>
+    </div>
+
+    <!-- Laws -->
+    <div class="section" id="laws">
+      <div class="section-title">Laws &amp; Lobbying</div>
+      <p>Every <strong>10 ticks</strong>, a new law activates and affects all players until the next vote. You can lobby (free action) during each 10-tick phase to push for the law you want.</p>
+      <p><strong>Lobbying:</strong> Spend credits via the Lobby free action. Each batch of credits earns you votes — 1 vote per 10 credits, or 1 per 8 credits if you're Trusted. The corp controlling the <strong>Government Quarter</strong> has their votes doubled. Most votes wins. If nobody lobbies, a law is chosen at random.</p>
+
+      <table>
+        <tr><th>Law</th><th>Effect</th></tr>
+        <tr><td>Data Sovereignty Act</td><td>Data Centers produce +20% intelligence</td></tr>
+        <tr><td>Labor Protection Bill</td><td>Attacking a Labor Zone costs +5 energy</td></tr>
+        <tr><td>Free Market Decree</td><td>Trade broker fees waived for everyone</td></tr>
+        <tr><td>Crackdown Order</td><td>Sabotage and Leak Scandal influence cost doubled</td></tr>
+        <tr><td>Infrastructure Investment</td><td>Fortify credit cost halved (4 instead of 8)</td></tr>
+        <tr><td>Security Lockdown</td><td>Sabotage and Leak Scandal energy cost doubled</td></tr>
+        <tr><td>Open Borders</td><td>Claim energy and credit cost halved</td></tr>
+        <tr><td>Corporate Transparency Act</td><td class="dim">— (no current effect)</td></tr>
+      </table>
+    </div>
+
+    <!-- Scoring -->
+    <div class="section" id="scoring">
+      <div class="section-title">Scoring</div>
+      <div class="score-formula">
+        Score = credits + energy + workforce + intelligence + influence + political power<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <span class="district-weight">(districts owned × 10)</span>
+      </div>
+      <br>
+      <p>Every resource counts equally at 1× — but <strong>each district is worth 10 points</strong>. Holding 5 more districts than a rival is worth 50 points, which dwarfs almost any resource advantage. Win the map, win the game — but don't let your stockpiles run to zero.</p>
+    </div>
+
+    <!-- Quick Reference -->
+    <div class="section" id="quickref">
+      <div class="section-title">Quick Reference</div>
+      <div class="quickref">
+        <div class="quickref-card">
+          <div class="qr-title">Primary Action Costs</div>
+          <table>
+            <tr><th>Action</th><th>Energy</th><th>Credits</th><th>Rep</th></tr>
+            <tr><td>Claim</td><td>3</td><td>5</td><td>—</td></tr>
+            <tr><td>Attack</td><td>≥5</td><td>10</td><td>−3</td></tr>
+            <tr><td>Fortify</td><td>2</td><td>8 (4*)</td><td>—</td></tr>
+            <tr><td>Sabotage</td><td>4</td><td>15</td><td>−5</td></tr>
+            <tr><td>Leak Scandal</td><td>2</td><td>10</td><td>−3</td></tr>
+            <tr><td>Counter Intel</td><td>3</td><td>—</td><td>—</td></tr>
+            <tr><td>Corp. Assassination</td><td>8</td><td>15</td><td>—</td></tr>
+          </table>
+          <p style="color:#4b5563;font-size:10px;margin-top:8px;">* with Infrastructure Investment law</p>
+        </div>
+        <div class="quickref-card">
+          <div class="qr-title">Combat Formula</div>
+          <table>
+            <tr><th></th><th>Formula</th><th>Max</th></tr>
+            <tr><td>Attack</td><td>energy×1.5 + wf</td><td>~42 at 15E</td></tr>
+            <tr><td>Defense</td><td>fort×3 + wf + allies</td><td>64 at lvl20</td></tr>
+          </table>
+          <p style="color:#4b5563;font-size:10px;margin-top:8px;">Workforce capped at 20 in combat. Alliance bonus max +4.</p>
+          <br>
+          <div class="qr-title">Reputation Thresholds</div>
+          <table>
+            <tr><td class="accent">≥ 75</td><td>Trusted — lobby at 8cr/vote</td></tr>
+            <tr><td>≥ 15</td><td>Can use covert ops</td></tr>
+            <tr><td class="danger">&lt; 15</td><td>Pariah — feared, can't lobby</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /layout -->
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('.section');
+  const navLinks = document.querySelectorAll('#sidebar nav a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`#sidebar nav a[href="#${entry.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

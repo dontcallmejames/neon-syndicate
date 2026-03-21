@@ -35,6 +35,7 @@ function createServer(db) {
   app.get('/admin', (_req, res) => res.sendFile('admin.html', { root: path.join(__dirname, '../../public') }));
   app.get('/play',  (_req, res) => res.sendFile('play.html',  { root: path.join(__dirname, '../../public') }));
   app.get('/game',  (_req, res) => res.sendFile('game.html',  { root: path.join(__dirname, '../../public') }));
+  app.get('/rules', (_req, res) => res.sendFile('rules.html', { root: path.join(__dirname, '../../public') }));
 
   // Admin API routes — protected by Bearer token
   app.use('/admin', adminAuth);
