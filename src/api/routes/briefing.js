@@ -20,15 +20,19 @@ function briefingRoute(db) {
     ).get(corp.id);
 
     if (stored && stored.tick === currentTick && !isGenerating) {
-      const payload = JSON.parse(stored.payload);
-      payload.nextTickAt = (season.last_tick_at || 0) + (season.tick_interval_ms || 0);
-      return res.json(payload);
+      try {
+        const payload = JSON.parse(stored.payload);
+        payload.nextTickAt = (season.last_tick_at || 0) + (season.tick_interval_ms || 0);
+        return res.json(payload);
+      } catch (err) {
+        console.warn('[briefing] failed to parse stored payload, falling through to live build:', err.message);
+      }
     }
 
     // Build live briefing from current DB state
     const holdings = db.prepare(
       'SELECT id, name, type, fortification_level, adjacent_ids FROM districts WHERE owner_id = ?'
-    ).all(corp.id).map(d => ({ ...d, adjacent_ids: JSON.parse(d.adjacent_ids) }));
+    ).all(corp.id).map(d => { try { return { ...d, adjacent_ids: JSON.parse(d.adjacent_ids) }; } catch { return { ...d, adjacent_ids: [] }; } });
 
     const alliances = db.prepare(`
       SELECT
@@ -72,8 +76,8 @@ function briefingRoute(db) {
       trade_id: t.trade_id,
       proposing_corp_id: t.proposing_corp_id,
       proposing_corp_name: t.proposing_corp_name,
-      offer: JSON.parse(t.offer),
-      request: JSON.parse(t.request),
+      offer: (() => { try { return JSON.parse(t.offer); } catch { return {}; } })(),
+      request: (() => { try { return JSON.parse(t.request); } catch { return {}; } })(),
     }));
 
     const activeLaw = db.prepare(

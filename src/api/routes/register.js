@@ -6,11 +6,21 @@ const CORP_DEFAULTS = { credits: 10, energy: 8, workforce: 6, intelligence: 4, i
 module.exports = function registerRoute(db) {
   return (req, res) => {
     const { name, description = '' } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required' });
+    if (typeof name !== 'string' || name.trim().length === 0 || name.length > 50) {
+      return res.status(400).json({ error: 'name must be a non-empty string, max 50 characters' });
+    }
+    if (typeof description !== 'string' || description.length > 200) {
+      return res.status(400).json({ error: 'description must be a string, max 200 characters' });
+    }
 
     // Registration is open only while season is 'pending'
     const season = db.prepare("SELECT * FROM seasons WHERE status = 'pending' ORDER BY created_at DESC LIMIT 1").get();
     if (!season) return res.status(403).json({ error: 'registration is closed — no pending season' });
+
+    const existing = db.prepare(
+      'SELECT id FROM corporations WHERE season_id = ? AND name = ?'
+    ).get(season.id, name);
+    if (existing) return res.status(409).json({ error: 'a corporation with that name already exists' });
 
     // Assign a random unclaimed district that is not adjacent to any already-assigned
     // starting district, and is not the government_quarter.

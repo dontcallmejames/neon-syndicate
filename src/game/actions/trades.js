@@ -84,20 +84,22 @@ function resolveTrades(db, seasonId, tick, tradeActions) {
       }
 
       // Execute transfer
-      for (const [res, amt] of Object.entries(offer)) {
-        transferResource(db, res, amt, trade.proposing_corp_id, corpId);
-      }
-      for (const [res, amt] of Object.entries(request)) {
-        transferResource(db, res, amt, corpId, trade.proposing_corp_id);
-      }
+      db.transaction(() => {
+        for (const [res, amt] of Object.entries(offer)) {
+          transferResource(db, res, amt, trade.proposing_corp_id, corpId);
+        }
+        for (const [res, amt] of Object.entries(request)) {
+          transferResource(db, res, amt, corpId, trade.proposing_corp_id);
+        }
 
-      const fee = (freeTradeActive || isAllied(db, trade.proposing_corp_id, corpId)) ? 0 : 2;
-      if (fee > 0) {
-        db.prepare('UPDATE corporations SET credits = credits - ? WHERE id = ?').run(fee, trade.proposing_corp_id);
-        db.prepare('UPDATE corporations SET credits = credits - ? WHERE id = ?').run(fee, corpId);
-      }
+        const fee = (freeTradeActive || isAllied(db, trade.proposing_corp_id, corpId)) ? 0 : 2;
+        if (fee > 0) {
+          db.prepare('UPDATE corporations SET credits = MAX(0, credits - ?) WHERE id = ?').run(fee, trade.proposing_corp_id);
+          db.prepare('UPDATE corporations SET credits = MAX(0, credits - ?) WHERE id = ?').run(fee, corpId);
+        }
 
-      db.prepare('UPDATE trades SET accepted_tick = ? WHERE id = ?').run(tick, trade.id);
+        db.prepare('UPDATE trades SET accepted_tick = ? WHERE id = ?').run(tick, trade.id);
+      })();
 
       const p = db.prepare('SELECT name FROM corporations WHERE id = ?').get(trade.proposing_corp_id);
       const a = db.prepare('SELECT name FROM corporations WHERE id = ?').get(corpId);

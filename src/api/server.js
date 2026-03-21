@@ -32,13 +32,13 @@ function createServer(db) {
   // Serve HTML pages without auth — pages handle their own auth client-side
   app.get('/',       (_req, res) => res.redirect('/play'));
   app.get('/observe',(_req, res) => res.sendFile('observe.html', { root: path.join(__dirname, '../../public') }));
-  app.get('/admin', (_req, res) => res.sendFile('admin.html', { root: path.join(__dirname, '../../public') }));
   app.get('/play',  (_req, res) => res.sendFile('play.html',  { root: path.join(__dirname, '../../public') }));
   app.get('/game',  (_req, res) => res.sendFile('game.html',  { root: path.join(__dirname, '../../public') }));
   app.get('/rules', (_req, res) => res.sendFile('rules.html', { root: path.join(__dirname, '../../public') }));
 
   // Admin API routes — protected by Bearer token
   app.use('/admin', adminAuth);
+  app.get('/admin', (_req, res) => res.sendFile('admin.html', { root: path.join(__dirname, '../../public') }));
   app.get('/admin/state', adminState(conn));
   app.use('/admin/seasons', adminSeasons(conn));
   app.use('/admin/corps', adminCorps(conn));

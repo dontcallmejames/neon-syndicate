@@ -5,9 +5,23 @@ let _wss = null;
 
 function createWsServer(httpServer) {
   _wss = new WebSocket.Server({ server: httpServer, path: '/ws' });
+
+  const heartbeat = setInterval(() => {
+    _wss.clients.forEach((ws) => {
+      if (ws.isAlive === false) return ws.terminate();
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  _wss.on('close', () => clearInterval(heartbeat));
+
   _wss.on('connection', (socket) => {
+    socket.isAlive = true;
+    socket.on('pong', () => { socket.isAlive = true; });
     socket.on('error', () => {}); // swallow client errors — don't crash server
   });
+
   return _wss;
 }
 

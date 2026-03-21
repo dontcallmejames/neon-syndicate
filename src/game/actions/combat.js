@@ -52,7 +52,7 @@ function resolveCombat(db, seasonId, tick, combatActions) {
 
     const costs = getClaimCosts(db, seasonId);
     db.prepare('UPDATE districts SET owner_id = ? WHERE id = ?').run(corpId, district.id);
-    db.prepare('UPDATE corporations SET energy = energy - ?, credits = credits - ? WHERE id = ?')
+    db.prepare('UPDATE corporations SET energy = MAX(0, energy - ?), credits = MAX(0, credits - ?) WHERE id = ?')
       .run(costs.energy, costs.credits, corpId);
 
     const corp = db.prepare('SELECT name FROM corporations WHERE id = ?').get(corpId);
@@ -86,7 +86,7 @@ function resolveCombat(db, seasonId, tick, combatActions) {
       const attackStrength = energySpent * 1.5 + Math.min(attacker.workforce, COMBAT_WORKFORCE_CAP);
       db.prepare(`
         UPDATE corporations
-        SET energy = energy - ?, credits = credits - 10, reputation = MAX(0, reputation - 3)
+        SET energy = MAX(0, energy - ?), credits = MAX(0, credits - 10), reputation = MAX(0, reputation - 3)
         WHERE id = ?
       `).run(energySpent, corpId);
       return { corpId, attackStrength };

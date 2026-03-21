@@ -14,7 +14,7 @@ function resolveSocial(db, seasonId, tick, socialActions, phaseId) {
       db.prepare(
         'INSERT INTO lobby_votes (id, phase_id, corp_id, law_id, credits) VALUES (?, ?, ?, ?, ?)'
       ).run(crypto.randomUUID(), phaseId, corpId, action.lawId, action.credits);
-      db.prepare('UPDATE corporations SET credits = credits - ? WHERE id = ?')
+      db.prepare('UPDATE corporations SET credits = MAX(0, credits - ?) WHERE id = ?')
         .run(action.credits, corpId);
       continue;
     }

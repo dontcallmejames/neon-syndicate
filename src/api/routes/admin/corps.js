@@ -70,6 +70,7 @@ module.exports = function adminCorpsRouter(db) {
       db.prepare('DELETE FROM briefings WHERE corp_id = ?').run(corp.id);
       db.prepare('DELETE FROM messages WHERE from_corp_id = ? OR to_corp_id = ?').run(corp.id, corp.id);
       db.prepare('DELETE FROM lobby_votes WHERE corp_id = ?').run(corp.id);
+      db.prepare('DELETE FROM trades WHERE proposing_corp_id = ? OR target_corp_id = ?').run(corp.id, corp.id);
       db.prepare('DELETE FROM corporations WHERE id = ?').run(corp.id);
     })();
 

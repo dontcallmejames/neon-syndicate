@@ -3,6 +3,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const FALLBACK_HEADLINE = 'CITY GRID STABLE — NO MAJOR INCIDENTS REPORTED THIS CYCLE';
 
+function stripMarkdownFences(text) {
+  return text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+}
+
 // Model is instantiated per-call so GEMINI_API_KEY can be set/changed in tests
 // without module-level caching issues.
 function getModel() {
@@ -40,7 +44,7 @@ Return ONLY valid JSON, no markdown, no explanation:
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(stripMarkdownFences(text));
     if (!parsed.primaryAction || !Array.isArray(parsed.freeActions)) return null;
     return parsed;
   } catch (err) {
@@ -86,7 +90,7 @@ ${JSON.stringify(corpSummaries, null, 2)}`;
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    return JSON.parse(text);
+    return JSON.parse(stripMarkdownFences(text));
   } catch (err) {
     console.warn('[gemini] generateNarratives error:', err.message);
     return {};
@@ -123,7 +127,7 @@ Return ONLY a JSON array of strings: ["HEADLINE ONE", "HEADLINE TWO", ...]`;
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(stripMarkdownFences(text));
     if (!Array.isArray(parsed) || parsed.length === 0) return [FALLBACK_HEADLINE];
     return parsed;
   } catch (err) {

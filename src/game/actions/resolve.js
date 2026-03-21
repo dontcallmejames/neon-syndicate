@@ -67,7 +67,7 @@ function resolveActions(db, seasonId, tick) {
         influenceCost *= 2;
       }
 
-      db.prepare('UPDATE corporations SET energy = energy - ?, credits = credits - ?, influence = MAX(0, influence - ?) WHERE id = ?')
+      db.prepare('UPDATE corporations SET energy = MAX(0, energy - ?), credits = MAX(0, credits - ?), influence = MAX(0, influence - ?) WHERE id = ?')
         .run(energyCost, creditCost, influenceCost, row.corp_id);
       db.prepare("UPDATE pending_actions SET status = 'resolved' WHERE id = ?").run(row.id);
       nullifiedRowIds.add(row.id);

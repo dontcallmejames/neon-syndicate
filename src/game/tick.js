@@ -12,7 +12,7 @@ const { broadcast } = require('../api/ws');
 function buildBriefingPayload(db, corp, season) {
   const holdings = db.prepare(
     'SELECT id, name, type, fortification_level, adjacent_ids FROM districts WHERE owner_id = ?'
-  ).all(corp.id).map(d => ({ ...d, adjacent_ids: JSON.parse(d.adjacent_ids) }));
+  ).all(corp.id).map(d => { try { return { ...d, adjacent_ids: JSON.parse(d.adjacent_ids) }; } catch { return { ...d, adjacent_ids: [] }; } });
 
   const alliances = db.prepare(`
     SELECT
@@ -274,6 +274,7 @@ async function runTick(db, seasonId) {
 
 let _interval = null;
 const _lastTick = { time: 0 };
+let _running = false;
 
 // The tick loop polls every 5 seconds and fires a tick when enough time has
 // passed per the active season's tick_interval_ms. This means the interval is
@@ -281,6 +282,7 @@ const _lastTick = { time: 0 };
 // interval is changed mid-season.
 function startTickLoop(db) {
   const conn = db || getDb();
+  conn.prepare('UPDATE seasons SET is_ticking = 0 WHERE is_ticking = 1').run();
   if (_interval) clearInterval(_interval);
   _lastTick.time = Date.now();
 
@@ -294,7 +296,13 @@ function startTickLoop(db) {
       const now = Date.now();
       if (now - _lastTick.time >= s.tick_interval_ms) {
         _lastTick.time = now;
-        await runTick(conn, s.id);
+        if (_running) return;
+        _running = true;
+        try {
+          await runTick(conn, s.id);
+        } finally {
+          _running = false;
+        }
       }
     } catch (err) {
       console.error('[tick] Unexpected error in tick loop:', err);

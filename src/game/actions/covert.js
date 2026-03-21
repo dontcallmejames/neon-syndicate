@@ -18,7 +18,7 @@ function resolveCovert(db, seasonId, tick, covertActions) {
       const newFort = Math.min(20, district.fortification_level + 5);
       const creditCost = getFortifyCreditCost(db, seasonId);
       db.prepare('UPDATE districts SET fortification_level = ? WHERE id = ?').run(newFort, district.id);
-      db.prepare('UPDATE corporations SET energy = energy - 2, credits = credits - ? WHERE id = ?')
+      db.prepare('UPDATE corporations SET energy = MAX(0, energy - 2), credits = MAX(0, credits - ?) WHERE id = ?')
         .run(creditCost, corpId);
       writeEvent(db, {
         seasonId, tick, type: 'fortify',
@@ -32,7 +32,7 @@ function resolveCovert(db, seasonId, tick, covertActions) {
       const district = db.prepare('SELECT * FROM districts WHERE id = ?').get(action.targetDistrictId);
       if (!district) continue;
       db.prepare('UPDATE districts SET sabotaged_until = ? WHERE id = ?').run(tick + 2, district.id);
-      db.prepare('UPDATE corporations SET energy = energy - 4, credits = credits - 15, reputation = MAX(0, reputation - 5) WHERE id = ?')
+      db.prepare('UPDATE corporations SET energy = MAX(0, energy - 4), credits = MAX(0, credits - 15), reputation = MAX(0, reputation - 5) WHERE id = ?')
         .run(corpId);
       writeEvent(db, {
         seasonId, tick, type: 'sabotage',
@@ -46,7 +46,7 @@ function resolveCovert(db, seasonId, tick, covertActions) {
       const target = db.prepare('SELECT * FROM corporations WHERE id = ?').get(action.targetCorpId);
       if (!target) continue;
       db.prepare('UPDATE corporations SET reputation = MAX(0, reputation - 8) WHERE id = ?').run(target.id);
-      db.prepare('UPDATE corporations SET energy = energy - 2, credits = credits - 10, reputation = MAX(0, reputation - 3) WHERE id = ?')
+      db.prepare('UPDATE corporations SET energy = MAX(0, energy - 2), credits = MAX(0, credits - 10), reputation = MAX(0, reputation - 3) WHERE id = ?')
         .run(corpId);
       writeEvent(db, {
         seasonId, tick, type: 'leak_scandal',
@@ -60,7 +60,7 @@ function resolveCovert(db, seasonId, tick, covertActions) {
       const target = db.prepare('SELECT * FROM corporations WHERE id = ?').get(action.targetCorpId);
       if (!target) continue;
       db.prepare('UPDATE corporations SET reputation = MAX(0, reputation - 25) WHERE id = ?').run(target.id);
-      db.prepare('UPDATE corporations SET energy = energy - 8, credits = credits - 15 WHERE id = ?')
+      db.prepare('UPDATE corporations SET energy = MAX(0, energy - 8), credits = MAX(0, credits - 15) WHERE id = ?')
         .run(corpId);
       writeEvent(db, {
         seasonId, tick, type: 'corporate_assassination',
