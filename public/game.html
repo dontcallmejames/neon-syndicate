@@ -627,16 +627,16 @@ function updateSeasonOverlay() {
 
   if (worldData.status === 'pending') {
     const corpList = worldData.corporations.length
-      ? '<ul style="list-style:none;margin-top:8px">' +
-        worldData.corporations.map(c => `<li style="color:#e5e7eb;font-size:11px;padding:2px 0">${esc(c.name)}</li>`).join('') +
-        '</ul>'
-      : '<div style="color:#6b7280;font-size:11px;margin-top:8px">None yet.</div>';
+      ? worldData.corporations.map(c => `<span style="color:#e5e7eb">${esc(c.name)}</span>`).join(' · ')
+      : 'None yet';
     mapOverlay.innerHTML =
-      '<div style="font-size:16px;color:#00f5c4;letter-spacing:2px;margin-bottom:8px">Season hasn\'t started yet</div>' +
-      '<div style="color:#6b7280;font-size:11px">Registered players:</div>' +
-      corpList;
+      `<div style="background:rgba(10,13,20,0.85);border:1px solid #fbbf24;border-radius:6px;padding:8px 16px;text-align:center">` +
+      `<span style="color:#fbbf24;font-size:11px;letter-spacing:1px">⏳ SEASON PENDING — Waiting for admin to start &nbsp;·&nbsp; Registered: ${corpList}</span>` +
+      `</div>`;
+    mapOverlay.style.alignItems = 'flex-start';
+    mapOverlay.style.paddingTop = '12px';
     mapOverlay.classList.add('visible');
-    svg.style.pointerEvents = 'none';
+    svg.style.pointerEvents = '';
     return;
   }
 
@@ -659,6 +659,8 @@ function updateSeasonOverlay() {
 
   // Active season (or null status with no data) — hide overlay and restore interactivity
   mapOverlay.classList.remove('visible');
+  mapOverlay.style.alignItems = '';
+  mapOverlay.style.paddingTop = '';
   svg.style.pointerEvents = '';
 }
 
