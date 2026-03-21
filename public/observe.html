@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Syndicate — Observer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #030712; color: #e5e7eb;
+      font-family: monospace; font-size: 12px;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    #top-bar {
+      background: #0a0d14; border-bottom: 1px solid #1e2a3a;
+      height: 38px; display: flex; align-items: center;
+      padding: 0 16px; gap: 14px; flex-shrink: 0;
+    }
+    #top-bar h1 { color: #00f5c4; font-size: 12px; letter-spacing: 3px; }
+    .tb-sep { color: #1e2a3a; }
+    #status-label { color: #6b7280; font-size: 10px; letter-spacing: 1px; }
+    #status-val { font-size: 10px; letter-spacing: 1px; }
+    #tick-val { color: #9ca3af; font-size: 10px; }
+    #last-update { margin-left: auto; color: #374151; font-size: 10px; }
+    #live-dot { color: #22c55e; font-size: 10px; }
+
+    #main { flex: 1; display: flex; overflow: hidden; }
+
+    #map-area { flex: 1; position: relative; overflow: hidden; }
+    #city-svg { width: 100%; height: 100%; }
+
+    /* Leaderboard */
+    #leaderboard {
+      width: 220px; flex-shrink: 0;
+      background: #0a0d14; border-left: 1px solid #1e2a3a;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #lb-title {
+      padding: 12px 14px 8px;
+      color: #374151; font-size: 9px; letter-spacing: 2px;
+      border-bottom: 1px solid #1e2a3a;
+    }
+    #lb-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .lb-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-bottom: 1px solid #0f1520;
+    }
+    .lb-rank { color: #374151; font-size: 10px; min-width: 16px; }
+    .lb-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .lb-name { flex: 1; font-size: 11px; color: #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-val { font-size: 10px; color: #ffd700; }
+    .lb-districts { font-size: 9px; color: #4b5563; margin-top: 1px; }
+    .lb-rep { font-size: 9px; margin-top: 1px; }
+
+    #lb-footer {
+      padding: 8px 14px; border-top: 1px solid #1e2a3a;
+      color: #374151; font-size: 9px;
+    }
+
+    /* Pending / ended overlay */
+    #map-overlay {
+      display: none; position: absolute; inset: 0;
+      background: rgba(3,7,18,0.85);
+      flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; color: #e5e7eb; font-family: monospace;
+      text-align: center; padding: 24px;
+    }
+    #map-overlay.visible { display: flex; }
+  </style>
+</head>
+<body>
+
+<div id="top-bar">
+  <h1>NEON SYNDICATE</h1>
+  <span class="tb-sep">|</span>
+  <span id="status-label">STATUS</span>
+  <span id="status-val">–</span>
+  <span class="tb-sep">|</span>
+  <span id="tick-val">TICK –</span>
+  <span id="last-update">–</span>
+  <span id="live-dot">●</span>
+</div>
+
+<div id="main">
+  <div id="map-area">
+    <svg id="city-svg" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="map-overlay"></div>
+  </div>
+
+  <div id="leaderboard">
+    <div id="lb-title">STANDINGS</div>
+    <div id="lb-list"></div>
+    <div id="lb-footer">Refreshes every 10s</div>
+  </div>
+</div>
+
+<script>
+const CORP_COLORS = ['#00f5c4','#ff4d64','#ffd700','#a855f7','#3b82f6','#f97316','#10b981','#ec4899'];
+const corpColorMap = {};
+
+const DISTRICT_POLYGONS = {
+  "Meridian Park":     [[740,938],[507,788],[393,707],[5,998],[5,1022],[665,1021],[665,970]],
+  "The Sprawl":        [[393,707],[223,568],[1,686],[5,998]],
+  "Harbor Front":      [[223,568],[288,531],[214,460],[173,482],[128,455],[96,472],[54,436],[8,462],[39,491],[0,506],[1,686]],
+  "Signal Flats":      [[288,531],[450,448],[489,534],[549,579],[393,707],[223,568]],
+  "Ashburn Alley":     [[549,579],[648,642],[507,788],[393,707]],
+  "Eastport Terminal": [[1534,725],[1336,714],[1257,709],[1163,717],[1003,728],[994,1022],[1074,1019],[1073,897],[1173,873],[1319,877],[1490,1022],[1535,1021]],
+  "Portside":          [[994,1022],[740,938],[745,680],[750,605],[1005,608],[1003,728],[1003,728]],
+  "Ember Ward":        [[648,642],[745,680],[740,938],[507,788]],
+  "Data Haven":        [[450,448],[628,354],[673,427],[791,477],[753,520],[750,605],[750,605],[745,680],[648,642],[549,579],[489,534]],
+  "Northgate Hub":     [[214,460],[288,531],[450,448],[423,346],[550,287],[483,225],[567,189],[567,164],[543,170],[477,153],[454,161],[514,187],[468,204],[405,233],[345,215],[315,225],[386,257],[376,265],[348,252],[321,268],[392,307],[393,341],[370,356],[293,314],[266,331],[352,381],[331,394],[260,351],[241,363],[306,406]],
+  "Neon Row":          [[791,477],[849,408],[972,429],[1009,432],[1005,608],[750,605],[753,520]],
+  "Voltaic Fields":    [[1009,432],[1093,432],[1256,434],[1261,614],[1261,614],[1257,709],[1163,717],[1003,728],[1005,608]],
+  "The Fringe":        [[1256,434],[1405,433],[1535,434],[1534,725],[1336,714],[1257,709],[1261,614],[1261,614]],
+  "The Canopy":        [[1093,432],[1095,282],[1329,286],[1384,288],[1405,433],[1256,434]],
+  "Gridlock":          [[1535,434],[1405,433],[1384,288],[1378,238],[1535,240]],
+  "The Undercroft":    [[849,408],[935,277],[1004,285],[1095,282],[1093,432],[1009,432],[972,429]],
+  "Nexus Core":        [[935,277],[849,408],[791,477],[673,427],[628,354],[787,266],[861,261]],
+  "Foundry District":  [[543,170],[567,164],[723,163],[773,191],[612,263],[550,287],[483,225],[567,189]],
+  "Silk Road":         [[423,346],[550,287],[612,263],[628,354],[450,448]],
+  "Blacksite":         [[1535,240],[1536,161],[1317,154],[1329,286],[1384,288],[1378,238]],
+  "Chrome Quarter":    [[612,263],[628,354],[787,266],[861,261],[861,261],[773,191]],
+  "Capitol Hill":      [[723,163],[897,153],[902,135],[1010,135],[1012,212],[948,200],[861,261],[773,191]],
+  "Veritas Square":    [[1010,135],[1102,140],[1095,282],[1004,285],[935,277],[861,261],[861,261],[948,200],[1012,212]],
+  "Ironworks":         [[1317,154],[1102,140],[1095,282],[1329,286]],
+};
+
+const DISTRICT_ICONS = {
+  power_grid:'⚡', financial_hub:'💰', labor_zone:'👷',
+  data_center:'🔍', black_market:'🎭', government_quarter:'🏛'
+};
+
+let worldData = null;
+
+function pointsStr(coords) {
+  return coords.map(([x,y]) => `${x},${y}`).join(' ');
+}
+function centroid(coords) {
+  const x = coords.reduce((s,[cx]) => s+cx, 0) / coords.length;
+  const y = coords.reduce((s,[,cy]) => s+cy, 0) / coords.length;
+  return [Math.round(x), Math.round(y)];
+}
+
+function renderMap() {
+  const svg = document.getElementById('city-svg');
+  const districts = worldData?.districts || [];
+  svg.innerHTML = '';
+
+  // Background
+  const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+  img.setAttribute('href', '/city-map.png');
+  img.setAttribute('x', '0'); img.setAttribute('y', '0');
+  img.setAttribute('width', '1536'); img.setAttribute('height', '1024');
+  img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.appendChild(img);
+
+  // Filled polygons
+  districts.forEach(d => {
+    const coords = DISTRICT_POLYGONS[d.name];
+    if (!coords) return;
+    const isOwned = !!d.ownerId;
+    const color = isOwned ? (corpColorMap[d.ownerId] || '#888') : '#7aaec8';
+    const fillOpacity = isOwned ? 0.35 : 0.07;
+
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('points', pointsStr(coords));
+    poly.setAttribute('fill', color);
+    poly.setAttribute('fill-opacity', fillOpacity);
+    poly.setAttribute('stroke', 'none');
+    svg.appendChild(poly);
+
+    // Icon
+    const [cx, cy] = centroid(coords);
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    icon.setAttribute('x', cx); icon.setAttribute('y', cy + 5);
+    icon.setAttribute('text-anchor', 'middle');
+    icon.setAttribute('font-size', '14');
+    icon.setAttribute('pointer-events', 'none');
+    icon.textContent = DISTRICT_ICONS[d.type] || '?';
+    svg.appendChild(icon);
+  });
+
+  // Edges
+  const edgeMap = new Map();
+  districts.forEach(d => {
+    const coords = DISTRICT_POLYGONS[d.name];
+    if (!coords) return;
+    for (let i = 0; i < coords.length; i++) {
+      const [x1,y1] = coords[i];
+      const [x2,y2] = coords[(i+1) % coords.length];
+      const fwd = x1 < x2 || (x1 === x2 && y1 < y2);
+      const key = fwd ? `${x1},${y1}|${x2},${y2}` : `${x2},${y2}|${x1},${y1}`;
+      if (!edgeMap.has(key)) edgeMap.set(key, { x1:fwd?x1:x2, y1:fwd?y1:y2, x2:fwd?x2:x1, y2:fwd?y2:y1, ds:[] });
+      edgeMap.get(key).ds.push(d);
+    }
+  });
+  edgeMap.forEach(({ x1,y1,x2,y2,ds }) => {
+    const allOwned = ds.every(d => d.ownerId);
+    const owned = ds.find(d => d.ownerId);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+    line.setAttribute('stroke', owned ? (corpColorMap[owned.ownerId] || '#888') : '#6a9ab8');
+    line.setAttribute('stroke-width', '1.5');
+    if (!allOwned) line.setAttribute('stroke-dasharray', '6 4');
+    line.setAttribute('pointer-events', 'none');
+    svg.appendChild(line);
+  });
+}
+
+function renderLeaderboard() {
+  if (!worldData) return;
+  const corps = [...(worldData.corporations || [])];
+
+  // Sort by valuation descending
+  if (worldData.status === 'active' || worldData.status === 'ended') {
+    corps.sort((a, b) => (b.valuation || 0) - (a.valuation || 0));
+  }
+
+  const list = document.getElementById('lb-list');
+  if (!corps.length) {
+    list.innerHTML = '<div style="padding:12px 14px;color:#374151;font-size:10px">No corps registered yet</div>';
+    return;
+  }
+
+  list.innerHTML = corps.map((c, i) => {
+    const color = corpColorMap[c.id] || '#888';
+    const repLabel = c.reputationLabel || '';
+    const repColor = c.reputation >= 75 ? '#4ade80' : c.reputation >= 40 ? '#9ca3af' : c.reputation >= 15 ? '#f97316' : '#ef4444';
+    const districtCount = c.districtCount ?? '';
+    return `<div class="lb-row">
+      <span class="lb-rank">#${i+1}</span>
+      <span class="lb-swatch" style="background:${color}"></span>
+      <span style="flex:1;min-width:0">
+        <div class="lb-name">${esc(c.name)}</div>
+        ${districtCount !== '' ? `<div class="lb-districts">${districtCount} district${districtCount !== 1 ? 's' : ''}</div>` : ''}
+        ${repLabel ? `<div class="lb-rep" style="color:${repColor}">${repLabel}</div>` : ''}
+      </span>
+      ${c.valuation != null ? `<span class="lb-val">${c.valuation.toLocaleString()}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderOverlay() {
+  const overlay = document.getElementById('map-overlay');
+  if (!worldData || worldData.status === 'active' || worldData.status === 'paused') {
+    overlay.classList.remove('visible');
+    return;
+  }
+  if (worldData.status === 'pending') {
+    overlay.innerHTML =
+      `<div style="background:rgba(10,13,20,0.85);border:1px solid #fbbf24;border-radius:6px;padding:8px 16px">` +
+      `<span style="color:#fbbf24;font-size:11px;letter-spacing:1px">⏳ SEASON PENDING — Waiting to start</span></div>`;
+    overlay.style.alignItems = 'flex-start';
+    overlay.style.paddingTop = '12px';
+    overlay.classList.add('visible');
+    return;
+  }
+  if (worldData.status === 'ended') {
+    const sorted = [...(worldData.corporations || [])].sort((a,b) => (b.valuation||0)-(a.valuation||0));
+    const rows = sorted.map((c,i) =>
+      `<div style="display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:12px">
+        <span style="color:#6b7280;min-width:20px">#${i+1}</span>
+        <span style="flex:1;color:#e5e7eb">${esc(c.name)}</span>
+        <span style="color:#ffd700">VAL ${(c.valuation||0).toLocaleString()}</span>
+      </div>`
+    ).join('');
+    overlay.innerHTML =
+      `<div style="background:rgba(10,13,20,0.92);border:1px solid #00f5c4;border-radius:8px;padding:24px;max-width:400px">
+        <div style="font-size:16px;color:#00f5c4;letter-spacing:2px;margin-bottom:16px">SEASON COMPLETE</div>
+        ${rows}
+      </div>`;
+    overlay.style.alignItems = 'center';
+    overlay.style.paddingTop = '';
+    overlay.classList.add('visible');
+    return;
+  }
+  overlay.classList.remove('visible');
+}
+
+function updateTopBar() {
+  if (!worldData) return;
+  const statusEl = document.getElementById('status-val');
+  const s = worldData.status;
+  statusEl.textContent = s ? s.toUpperCase() : '–';
+  statusEl.style.color = s === 'active' ? '#00f5c4' : s === 'pending' ? '#fbbf24' : s === 'ended' ? '#ef4444' : '#6b7280';
+  document.getElementById('tick-val').textContent = `TICK ${worldData.tick ?? '–'}`;
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/world');
+    if (!res.ok) return;
+    worldData = await res.json();
+
+    // Build color map
+    (worldData.corporations || []).forEach((c, i) => {
+      if (!corpColorMap[c.id]) corpColorMap[c.id] = CORP_COLORS[i % CORP_COLORS.length];
+    });
+
+    renderMap();
+    renderLeaderboard();
+    renderOverlay();
+    updateTopBar();
+    document.getElementById('last-update').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+  } catch (_) {}
+}
+
+poll();
+setInterval(poll, 10000);
+</script>
+</body>
+</html>
