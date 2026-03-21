@@ -9,7 +9,7 @@ module.exports = function registerRoute(db) {
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     // Registration is open only while season is 'pending'
-    const season = db.prepare("SELECT * FROM seasons WHERE status = 'pending' LIMIT 1").get();
+    const season = db.prepare("SELECT * FROM seasons WHERE status = 'pending' ORDER BY created_at DESC LIMIT 1").get();
     if (!season) return res.status(403).json({ error: 'registration is closed — no pending season' });
 
     // Assign a random unclaimed district that is not adjacent to any already-assigned
