@@ -33,15 +33,20 @@
     #city-svg { width: 100%; height: 100%; cursor: grab; display: block; }
     #city-svg.dragging { cursor: grabbing; }
 
-    /* ── Leaderboard overlay ─────────────────────────────────────────── */
-    #leaderboard {
+    /* ── Right panel (leaderboard + district popup stacked) ─────────── */
+    #right-panel {
       position: absolute; top: 12px; right: 12px; z-index: 10;
-      width: 200px;
+      width: 210px; display: flex; flex-direction: column; gap: 8px;
+      max-height: calc(100% - 24px);
+    }
+    .panel-box {
       background: rgba(10, 13, 20, 0.82);
       backdrop-filter: blur(6px);
       border: 1px solid #1e2a3a; border-radius: 8px;
-      overflow: hidden;
+      overflow: hidden; flex-shrink: 0;
     }
+
+    /* Leaderboard */
     #lb-title {
       padding: 8px 12px 6px;
       color: #4b5563; font-size: 9px; letter-spacing: 2px;
@@ -58,6 +63,35 @@
     .lb-right { text-align: right; flex-shrink: 0; }
     .lb-val { font-size: 10px; color: #ffd700; display: block; }
     .lb-districts { font-size: 9px; color: #4b5563; display: block; }
+
+    /* District popup */
+    #district-popup { display: none; }
+    #district-popup.visible { display: block; }
+    #dp-header {
+      padding: 8px 12px 6px; border-bottom: 1px solid #1e2a3a;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    #dp-name { font-size: 11px; color: #e5e7eb; letter-spacing: 1px; }
+    #dp-close {
+      color: #374151; font-size: 14px; cursor: pointer; line-height: 1;
+      background: none; border: none; padding: 0 0 0 8px; color: #4b5563;
+    }
+    #dp-close:hover { color: #9ca3af; }
+    #dp-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .dp-section-label { font-size: 9px; color: #4b5563; letter-spacing: 2px; margin-bottom: 4px; }
+    .dp-type-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #9ca3af; }
+    .dp-owner-row { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+    .dp-owner-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .dp-owner-name { color: #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dp-res-grid { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 10px; }
+    .dp-res-label { color: #6b7280; }
+    .dp-res-val { color: #00f5c4; text-align: right; }
+    .dp-res-rep { color: #ef4444; text-align: right; }
+    .dp-fort-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #6b7280; }
+    .dp-fort-pips { display: flex; gap: 2px; }
+    .dp-pip { width: 8px; height: 8px; border-radius: 1px; }
+    .dp-pip.filled { background: #ffd700; }
+    .dp-pip.empty { background: #1e2a3a; }
 
     /* ── Pending / ended overlay ─────────────────────────────────────── */
     #map-overlay {
@@ -89,9 +123,19 @@
 <div id="map-area">
   <svg id="city-svg" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet"></svg>
 
-  <div id="leaderboard">
-    <div id="lb-title">STANDINGS</div>
-    <div id="lb-list"></div>
+  <div id="right-panel">
+    <div class="panel-box" id="leaderboard">
+      <div id="lb-title">STANDINGS</div>
+      <div id="lb-list"></div>
+    </div>
+
+    <div class="panel-box" id="district-popup">
+      <div id="dp-header">
+        <span id="dp-name"></span>
+        <button id="dp-close" title="Close">✕</button>
+      </div>
+      <div id="dp-body"></div>
+    </div>
   </div>
 
   <div id="map-overlay"></div>
@@ -133,7 +177,28 @@ const DISTRICT_ICONS = {
   data_center:'🔍', black_market:'🎭', government_quarter:'🏛'
 };
 
+const PRODUCTION = {
+  data_center:        { intelligence: 3, credits: 1 },
+  power_grid:         { energy: 2, workforce: 1, credits: 1 },
+  labor_zone:         { workforce: 3, credits: 1 },
+  financial_hub:      { credits: 4, energy: 1 },
+  black_market:       { influence: 2, credits: 2, reputation: -1 },
+  government_quarter: { political_power: 2, influence: 1, credits: 2, reputation: 1 },
+};
+
+const RES_LABELS = {
+  credits: 'Credits', energy: 'Energy', workforce: 'Workforce',
+  intelligence: 'Intelligence', influence: 'Influence',
+  political_power: 'Political Power', reputation: 'Reputation',
+};
+
+const TYPE_LABELS = {
+  power_grid: 'Power Grid', financial_hub: 'Financial Hub', labor_zone: 'Labor Zone',
+  data_center: 'Data Center', black_market: 'Black Market', government_quarter: 'Government Quarter',
+};
+
 let worldData = null;
+let selectedDistrictName = null;
 
 // ── Pan / zoom state ───────────────────────────────────────────────────────
 const SVG_W = 1536, SVG_H = 1024;
@@ -166,20 +231,31 @@ svg.addEventListener('wheel', e => {
 
 // Drag to pan
 let drag = null;
+let dragMoved = false;
 svg.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
   drag = { cx: e.clientX, cy: e.clientY, bx: vb.x, by: vb.y };
+  dragMoved = false;
   svg.classList.add('dragging');
 });
 window.addEventListener('mousemove', e => {
   if (!drag) return;
+  const dx = e.clientX - drag.cx, dy = e.clientY - drag.cy;
+  if (Math.hypot(dx, dy) > 4) dragMoved = true;
   const rect = svg.getBoundingClientRect();
-  vb.x = drag.bx - (e.clientX - drag.cx) * vb.w / rect.width;
-  vb.y = drag.by - (e.clientY - drag.cy) * vb.h / rect.height;
+  vb.x = drag.bx - dx * vb.w / rect.width;
+  vb.y = drag.by - dy * vb.h / rect.height;
   applyViewBox();
 });
-window.addEventListener('mouseup', () => {
+window.addEventListener('mouseup', e => {
+  if (drag && !dragMoved && e.target === svg) {
+    // Clicked blank map area — deselect district
+    selectedDistrictName = null;
+    renderMap();
+    renderDistrictPopup();
+  }
   drag = null;
+  dragMoved = false;
   svg.classList.remove('dragging');
 });
 
@@ -247,12 +323,22 @@ function renderMap() {
   districts.forEach(d => {
     const coords = DISTRICT_POLYGONS[d.name];
     if (!coords) return;
+    const isSelected = d.name === selectedDistrictName;
     const color = d.ownerId ? (corpColorMap[d.ownerId] || '#888') : '#7aaec8';
     const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     poly.setAttribute('points', pointsStr(coords));
     poly.setAttribute('fill', color);
-    poly.setAttribute('fill-opacity', d.ownerId ? 0.35 : 0.07);
-    poly.setAttribute('stroke', 'none');
+    poly.setAttribute('fill-opacity', isSelected ? 0.55 : d.ownerId ? 0.35 : 0.07);
+    poly.setAttribute('stroke', isSelected ? color : 'none');
+    poly.setAttribute('stroke-width', isSelected ? '2' : '0');
+    poly.setAttribute('stroke-opacity', '0.9');
+    poly.style.cursor = 'pointer';
+    poly.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't let it bubble to SVG pan handler
+      selectedDistrictName = isSelected ? null : d.name;
+      renderMap();
+      renderDistrictPopup();
+    });
     svg.appendChild(poly);
 
     const [cx, cy] = centroid(coords);
@@ -289,6 +375,72 @@ function renderMap() {
     svg.appendChild(line);
   });
 }
+
+function renderDistrictPopup() {
+  const popup = document.getElementById('district-popup');
+  if (!selectedDistrictName || !worldData) {
+    popup.classList.remove('visible'); return;
+  }
+  const d = worldData.districts.find(x => x.name === selectedDistrictName);
+  if (!d) { popup.classList.remove('visible'); return; }
+
+  document.getElementById('dp-name').textContent = d.name.toUpperCase();
+
+  const owner = d.ownerId ? worldData.corporations.find(c => c.id === d.ownerId) : null;
+  const ownerColor = owner ? (corpColorMap[owner.id] || '#888') : null;
+  const prod = PRODUCTION[d.type] || {};
+
+  const resRows = Object.entries(prod).map(([k, v]) => {
+    const label = RES_LABELS[k] || k;
+    const isRep = k === 'reputation';
+    const sign = v > 0 ? '+' : '';
+    const cls = isRep ? (v > 0 ? 'dp-res-val' : 'dp-res-rep') : 'dp-res-val';
+    return `<span class="dp-res-label">${label}</span><span class="${cls}">${sign}${v}/tick</span>`;
+  }).join('');
+
+  const maxFort = 5;
+  const fortLevel = d.fortificationLevel || 0;
+  const pips = Array.from({ length: maxFort }, (_, i) =>
+    `<span class="dp-pip ${i < fortLevel ? 'filled' : 'empty'}"></span>`
+  ).join('');
+
+  document.getElementById('dp-body').innerHTML = `
+    <div>
+      <div class="dp-section-label">TYPE</div>
+      <div class="dp-type-row">
+        <span>${DISTRICT_ICONS[d.type] || '?'}</span>
+        <span>${TYPE_LABELS[d.type] || d.type}</span>
+      </div>
+    </div>
+    <div>
+      <div class="dp-section-label">OWNER</div>
+      ${owner
+        ? `<div class="dp-owner-row">
+             <span class="dp-owner-swatch" style="background:${ownerColor}"></span>
+             <span class="dp-owner-name">${esc(owner.name)}</span>
+           </div>`
+        : `<div style="color:#374151;font-size:10px">Unclaimed</div>`}
+    </div>
+    <div>
+      <div class="dp-section-label">PRODUCTION / TICK</div>
+      <div class="dp-res-grid">${resRows}</div>
+    </div>
+    <div>
+      <div class="dp-section-label">FORTIFICATION</div>
+      <div class="dp-fort-row">
+        <div class="dp-fort-pips">${pips}</div>
+        <span>Level ${fortLevel}</span>
+      </div>
+    </div>`;
+
+  popup.classList.add('visible');
+}
+
+document.getElementById('dp-close').addEventListener('click', () => {
+  selectedDistrictName = null;
+  renderMap();
+  renderDistrictPopup();
+});
 
 function renderLeaderboard() {
   if (!worldData) return;
@@ -389,6 +541,7 @@ async function poll() {
 
     renderMap();
     renderLeaderboard();
+    renderDistrictPopup();
     renderOverlay();
     updateTopBar();
     document.getElementById('last-update').textContent =
