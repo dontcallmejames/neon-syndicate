@@ -22,8 +22,27 @@
     .tb-sep { color: #1e2a3a; }
     #status-val { font-size: 10px; letter-spacing: 1px; }
     #tick-val { color: #9ca3af; font-size: 10px; white-space: nowrap; }
-    #law-display { font-size: 10px; color: #fbbf24; letter-spacing: 1px; white-space: nowrap; display: none; }
+    #law-display { font-size: 10px; color: #fbbf24; letter-spacing: 1px; white-space: nowrap; display: none; cursor: default; }
     #law-sep { display: none; }
+    #law-wrap { position: relative; display: none; }
+    #law-wrap.visible { display: inline; }
+    #law-tip {
+      display: none; position: absolute; top: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%);
+      background: #0a0d14; border: 1px solid #1e2a3a; border-radius: 6px;
+      padding: 8px 10px; white-space: nowrap; z-index: 100;
+      color: #9ca3af; font-size: 10px; letter-spacing: 0; line-height: 1.5;
+      pointer-events: none;
+    }
+    #law-tip::before {
+      content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+      border: 5px solid transparent; border-bottom-color: #1e2a3a;
+    }
+    #law-tip::after {
+      content: ''; position: absolute; bottom: calc(100% - 1px); left: 50%; transform: translateX(-50%);
+      border: 5px solid transparent; border-bottom-color: #0a0d14;
+    }
+    #law-wrap:hover #law-tip { display: block; }
     #last-update { margin-left: auto; color: #374151; font-size: 10px; white-space: nowrap; }
     #live-dot { color: #22c55e; font-size: 10px; }
     #zoom-hint { color: #374151; font-size: 9px; white-space: nowrap; }
@@ -113,7 +132,7 @@
   <span class="tb-sep">|</span>
   <span id="tick-val">TICK –</span>
   <span id="law-sep" class="tb-sep">|</span>
-  <span id="law-display">–</span>
+  <span id="law-wrap"><span id="law-display">–</span><div id="law-tip"></div></span>
   <span class="tb-sep">|</span>
   <span id="zoom-hint">scroll to zoom · drag to pan</span>
   <span id="last-update">–</span>
@@ -514,13 +533,26 @@ function updateTopBar() {
 
   const lawEl = document.getElementById('law-display');
   const lawSep = document.getElementById('law-sep');
+  const lawWrap = document.getElementById('law-wrap');
+  const lawTip = document.getElementById('law-tip');
   const law = worldData.activeLaw;
+  const LAW_DESCRIPTIONS = {
+    security_lockdown: 'All covert operations are blocked city-wide.',
+    crackdown: 'Covert ops cost double for non-pariah corporations.',
+    open_borders: 'District claim costs are reduced for all corps.',
+    fortify_discount: 'Fortifying districts costs half the usual resources.',
+    data_center_bonus: 'Data centers generate bonus intelligence each tick.',
+    labor_zone_attack_cost: 'Attacking labor zone districts costs extra resources.',
+    free_trade: 'Trade fees are waived — all trades execute at no cost.',
+    transparency: 'Corporate Transparency Act is in effect.',
+  };
   if (law) {
-    lawEl.textContent = `⚖ ${law.name.toUpperCase()}`;
-    lawEl.style.display = 'inline';
+    lawEl.textContent = `CURRENT LAW: ${law.name.toUpperCase()}`;
+    lawTip.textContent = LAW_DESCRIPTIONS[law.effect] ?? law.name;
+    lawWrap.classList.add('visible');
     lawSep.style.display = 'inline';
   } else {
-    lawEl.style.display = 'none';
+    lawWrap.classList.remove('visible');
     lawSep.style.display = 'none';
   }
 }
