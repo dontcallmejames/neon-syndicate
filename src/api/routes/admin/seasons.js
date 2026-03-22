@@ -118,6 +118,12 @@ module.exports = function adminSeasonsRouter(db) {
     // End any currently active seasons before starting this one
     db.prepare("UPDATE seasons SET status = 'ended' WHERE status = 'active'").run();
     db.prepare('UPDATE seasons SET status = ? WHERE id = ?').run('active', season.id);
+    // Seed the first voting phase if none exists
+    const existingPhase = db.prepare('SELECT id FROM phases WHERE season_id = ? LIMIT 1').get(season.id);
+    if (!existingPhase) {
+      db.prepare('INSERT INTO phases (id, season_id, phase_number, start_tick) VALUES (?, ?, 1, 1)')
+        .run(crypto.randomUUID(), season.id);
+    }
     res.json({ ok: true });
   });
   router.post('/:id/pause',  (req, res) => transition(req, res, 'active', 'paused', 'Season is not active'));
