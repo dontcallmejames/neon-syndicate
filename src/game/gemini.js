@@ -43,7 +43,7 @@ Return ONLY valid JSON, no markdown, no explanation:
 { "primaryAction": { "type": "...", ...fields }, "freeActions": [...] }`;
 
   try {
-    const result = await model.generateContent(prompt, { signal: AbortSignal.timeout(15000) });
+    const result = await model.generateContent(prompt, { signal: AbortSignal.timeout(45000) });
     const text = result.response.text();
     const parsed = JSON.parse(stripMarkdownFences(text));
     if (!parsed.primaryAction || !Array.isArray(parsed.freeActions)) return null;
@@ -88,7 +88,7 @@ Corps:
 ${JSON.stringify(corpSummaries, null, 2)}`;
 
   try {
-    const result = await model.generateContent(prompt, { signal: AbortSignal.timeout(15000) });
+    const result = await model.generateContent(prompt, { signal: AbortSignal.timeout(45000) });
     const text = result.response.text();
     return JSON.parse(stripMarkdownFences(text));
   } catch (err) {
@@ -135,7 +135,7 @@ Tick ${tick} — the boardrooms were quiet, but the streets never sleep. Write 3
 Return ONLY a JSON array of strings: ["HEADLINE ONE", "HEADLINE TWO", ...]`;
 
   try {
-    const result = await model.generateContent(prompt, { signal: AbortSignal.timeout(15000) });
+    const result = await model.generateContent(prompt, { signal: AbortSignal.timeout(45000) });
     const text = result.response.text();
     const parsed = JSON.parse(stripMarkdownFences(text));
     if (!Array.isArray(parsed) || parsed.length === 0) return [FALLBACK_HEADLINE];
