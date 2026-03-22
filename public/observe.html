@@ -517,8 +517,8 @@ function updateTopBar() {
   const law = worldData.activeLaw;
   if (law) {
     lawEl.textContent = `⚖ ${law.name.toUpperCase()}`;
-    lawEl.style.display = '';
-    lawSep.style.display = '';
+    lawEl.style.display = 'inline';
+    lawSep.style.display = 'inline';
   } else {
     lawEl.style.display = 'none';
     lawSep.style.display = 'none';
