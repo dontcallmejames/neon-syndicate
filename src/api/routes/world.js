@@ -1,10 +1,11 @@
 // src/api/routes/world.js
 const { calculateValuation } = require('../../game/valuation');
 const { buildWorldState } = require('../../game/worldState');
+const { getActiveLaw } = require('../../game/laws');
 
 module.exports = function worldRoute(conn) {
   return function (_req, res) {
-    const season = conn.prepare("SELECT * FROM seasons WHERE status != 'ended' ORDER BY created_at DESC LIMIT 1").get();
+    const season = conn.prepare("SELECT * FROM seasons WHERE status = 'active' ORDER BY created_at DESC LIMIT 1").get();
 
     if (!season) {
       // Check for a pending or ended season so we can report its status and corps
@@ -58,7 +59,7 @@ module.exports = function worldRoute(conn) {
         districts: [],
         corporations,
         alliances: [],
-        activeLaw: null,
+        activeLaw: getActiveLaw(conn, otherSeason.id) || null,
         headlines: [],
       });
     }

@@ -111,7 +111,15 @@ module.exports = function adminSeasonsRouter(db) {
     res.json({ ok: true });
   }
 
-  router.post('/:id/start',  (req, res) => transition(req, res, 'pending', 'active', 'Season is not in pending status'));
+  router.post('/:id/start', (req, res) => {
+    const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
+    if (!season) return res.status(404).json({ error: 'Season not found' });
+    if (season.status !== 'pending') return res.status(409).json({ error: 'Season is not in pending status' });
+    // End any currently active seasons before starting this one
+    db.prepare("UPDATE seasons SET status = 'ended' WHERE status = 'active'").run();
+    db.prepare('UPDATE seasons SET status = ? WHERE id = ?').run('active', season.id);
+    res.json({ ok: true });
+  });
   router.post('/:id/pause',  (req, res) => transition(req, res, 'active', 'paused', 'Season is not active'));
   router.post('/:id/resume', (req, res) => transition(req, res, 'paused', 'active', 'Season is not paused'));
   router.post('/:id/end',    (req, res) => transition(req, res, ['active', 'paused'], 'ended', 'Season is not active or paused'));

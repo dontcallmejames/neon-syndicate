@@ -30,21 +30,26 @@ const path = require('path');
 const BASE_URL   = process.env.NS_BASE_URL   || 'https://neon.dontcallmejames.com';
 const ADMIN_KEY  = process.env.NS_ADMIN_KEY;
 const NUM_GAMES  = parseInt(process.env.NS_GAMES   || '999');
-const NUM_BOTS   = parseInt(process.env.NS_BOTS    || '8');
+let   NUM_BOTS   = parseInt(process.env.NS_BOTS    || '8');
 const TICKS      = parseInt(process.env.NS_TICKS   || '40');
 const TICK_MS    = parseInt(process.env.NS_TICK_MS || '90000');
 const REST_MS    = parseInt(process.env.NS_REST_MS || '30000');
 
 const BOT_CONFIGS = [
-  { name: 'Apex Industries',      strategy: 'expander'   },
-  { name: 'Iron Meridian Corp',   strategy: 'militarist' },
-  { name: 'Goldvault Systems',    strategy: 'economist'  },
-  { name: 'Capitol Nexus Ltd',    strategy: 'politician' },
-  { name: 'Vortex Dynamics',      strategy: 'expander'   },
-  { name: 'Redline Syndicate',    strategy: 'militarist' },
-  { name: 'Prosperity Holdings',  strategy: 'economist'  },
-  { name: 'Civic Power Group',    strategy: 'politician' },
+  { name: 'Apex Industries',      strategy: 'expander'    },
+  { name: 'Iron Meridian Corp',   strategy: 'militarist'  },
+  { name: 'Goldvault Systems',    strategy: 'economist'   },
+  { name: 'Capitol Nexus Ltd',    strategy: 'politician'  },
+  { name: 'Phantom Cell',         strategy: 'saboteur'    },
+  { name: 'Accord Consortium',    strategy: 'diplomat'    },
+  { name: 'Vulture Capital',      strategy: 'opportunist' },
+  { name: 'Obsidian Reserve',     strategy: 'hoarder'     },
 ];
+
+if (NUM_BOTS > BOT_CONFIGS.length) {
+  console.warn(`Warning: NS_BOTS=${NUM_BOTS} exceeds available configs (${BOT_CONFIGS.length}). Clamping to ${BOT_CONFIGS.length}.`);
+  NUM_BOTS = BOT_CONFIGS.length;
+}
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 async function api(method, urlPath, body, key) {
