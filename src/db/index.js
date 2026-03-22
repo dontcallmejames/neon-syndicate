@@ -6,7 +6,11 @@ const dbPath = process.env.DB_PATH || path.join(__dirname, '../../neon.db');
 let _db;
 
 function getDb() {
-  if (!_db) _db = new Database(dbPath);
+  if (!_db) {
+    _db = new Database(dbPath);
+    _db.pragma('journal_mode = WAL');
+    _db.pragma('busy_timeout = 5000');
+  }
   return _db;
 }
 

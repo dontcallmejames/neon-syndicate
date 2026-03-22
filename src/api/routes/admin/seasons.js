@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const express = require('express');
 const { createLaws, createDistrictMap } = require('../../../game/world');
 const { runTickNow } = require('../../../game/tick');
+const logger = require('../../../lib/logger');
 
 const SEASON_DEFAULTS = {
   season_length: 100,
@@ -124,7 +125,7 @@ module.exports = function adminSeasonsRouter(db) {
     try {
       await runTickNow(db, season.id);
     } catch (err) {
-      console.error('[admin tick] runTick failed:', err);
+      logger.error('admin', 'runTick failed', { err: err.message, stack: err.stack });
       return res.status(500).json({ error: 'Tick failed' });
     }
     res.json({ ok: true });

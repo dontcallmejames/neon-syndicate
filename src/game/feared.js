@@ -1,13 +1,14 @@
 // src/game/feared.js
 const { writeEvent } = require('./events');
+const { PARIAH_THRESHOLD } = require('./reputation');
 
 function applyFeared(db, seasonId, tick) {
   const corps = db.prepare(
     'SELECT * FROM corporations WHERE season_id = ? ORDER BY id ASC'
   ).all(seasonId);
 
-  const pariahs  = corps.filter(c => c.reputation < 15);
-  const nonPariahs = corps.filter(c => c.reputation >= 15);
+  const pariahs  = corps.filter(c => c.reputation < PARIAH_THRESHOLD);
+  const nonPariahs = corps.filter(c => c.reputation >= PARIAH_THRESHOLD);
   if (pariahs.length === 0) return;
 
   for (const payer of nonPariahs) {

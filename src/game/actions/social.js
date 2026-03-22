@@ -4,9 +4,11 @@ const crypto = require('crypto');
 function resolveSocial(db, seasonId, tick, socialActions, phaseId) {
   for (const { corpId, action } of socialActions) {
     if (action.type === 'message') {
+      if (!action.toCorpId || !action.text || typeof action.text !== 'string') continue;
+      const text = action.text.slice(0, 500);
       db.prepare(
         'INSERT INTO messages (id, from_corp_id, to_corp_id, text, delivered_tick) VALUES (?, ?, ?, ?, ?)'
-      ).run(crypto.randomUUID(), corpId, action.toCorpId, action.text, tick);
+      ).run(crypto.randomUUID(), corpId, action.toCorpId, text, tick);
       continue;
     }
 

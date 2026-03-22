@@ -67,6 +67,52 @@
     #ws-status { font-size: 10px; color: #22c55e; }
     #ws-reconnecting { font-size: 10px; color: #f59e0b; display: none; }
 
+    /* ── Law pill in top bar ─────────────────────────────────────────── */
+    #law-pill {
+      display: none; align-items: center; gap: 4px;
+      background: rgba(251,191,36,0.08); border: 1px solid #92400e;
+      border-radius: 3px; padding: 2px 7px; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    #law-pill:hover { background: rgba(251,191,36,0.14); }
+    #law-pill-name { color: #fbbf24; font-size: 10px; letter-spacing: 0.5px; }
+
+    /* ── Laws tab pane ───────────────────────────────────────────────── */
+    #pane-laws { padding: 10px 14px; height: 100%; overflow-y: auto; }
+    .law-phase-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      color: #4b5563; font-size: 9px; letter-spacing: 1px;
+      margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #1e2a3a;
+    }
+    .law-phase-bar span { color: #9ca3af; }
+    .law-active-badge {
+      display: inline-block; background: rgba(251,191,36,0.12);
+      border: 1px solid #92400e; border-radius: 3px;
+      color: #fbbf24; font-size: 8px; letter-spacing: 1px;
+      padding: 1px 5px; margin-left: 6px;
+    }
+    .law-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid #111827;
+    }
+    .law-row:last-child { border-bottom: none; }
+    .law-row-info { flex: 1; min-width: 0; }
+    .law-row-name { color: #e5e7eb; font-size: 11px; }
+    .law-row-effect { color: #6b7280; font-size: 9px; letter-spacing: 0.5px; margin-top: 2px; }
+    .law-credits-input {
+      background: #030712; border: 1px solid #1e2a3a; color: #e5e7eb;
+      font-family: monospace; font-size: 10px; padding: 3px 6px;
+      border-radius: 3px; width: 54px; text-align: right;
+    }
+    #lobby-submit-btn {
+      width: 100%; margin-top: 10px; padding: 6px;
+      background: rgba(251,191,36,0.08); border: 1px solid #92400e;
+      color: #fbbf24; font-family: monospace; font-size: 10px;
+      letter-spacing: 1px; cursor: pointer; border-radius: 3px;
+    }
+    #lobby-submit-btn:hover { background: rgba(251,191,36,0.16); }
+    #lobby-submit-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
     /* ── MAIN AREA ───────────────────────────────────────────────────── */
     #main { flex: 1; display: flex; overflow: hidden; position: relative; }
 
@@ -430,6 +476,10 @@
   </span>
   <span class="tb-sep">|</span>
   <span id="rep-label">REP <span id="tb-rep">–</span></span>
+  <span class="tb-sep" id="law-sep" style="display:none">|</span>
+  <div id="law-pill" onclick="switchLogTab('laws')" title="Click to view laws & voting">
+    <span>⚖️</span><span id="law-pill-name">–</span>
+  </div>
 
   <div id="timer-area">
     <span id="ws-status">●</span>
@@ -485,6 +535,9 @@
     <div class="log-tab" data-tab="trade" onclick="switchLogTab('trade'); event.stopPropagation()">
       TRADE <span class="log-badge" id="badge-trade"></span>
     </div>
+    <div class="log-tab" data-tab="laws" onclick="switchLogTab('laws'); event.stopPropagation()">
+      LAWS <span class="log-badge" id="badge-laws"></span>
+    </div>
     <span style="margin-left:auto;color:#374151;font-size:10px;padding-right:4px" id="log-toggle-btn" onclick="toggleLog(); event.stopPropagation()">▲ EXPAND</span>
   </div>
   <div id="log-body">
@@ -505,6 +558,21 @@
         <button class="btn-send" onclick="sendMessage()">SEND</button>
       </div>
     </div>
+    <div class="log-pane" id="pane-laws">
+      <div class="law-phase-bar">
+        <span>CURRENT LAW</span>
+        <span id="law-phase-info">–</span>
+      </div>
+      <div id="laws-list"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+        <label style="color:#4b5563;font-size:9px;letter-spacing:1px;white-space:nowrap">CREDITS TO SPEND</label>
+        <input type="number" id="lobby-credits-input" min="10" value="10"
+          style="background:#030712;border:1px solid #1e2a3a;color:#e5e7eb;font-family:monospace;font-size:10px;padding:3px 6px;border-radius:3px;width:64px;">
+      </div>
+      <button id="lobby-submit-btn" onclick="sendLobbyVote()" disabled>SUBMIT LOBBY VOTE</button>
+      <div id="lobby-status" style="color:#6b7280;font-size:10px;margin-top:5px;min-height:12px"></div>
+    </div>
+
     <div class="log-pane" id="pane-trade">
       <!-- Left: trade form -->
       <div class="trade-col-main">
@@ -712,6 +780,18 @@ function updateTopBar() {
   else if (label === 'Notorious') repEl.className = 'rep-notorious';
   else if (label === 'Pariah')    repEl.className = 'rep-pariah';
   else                            repEl.className = 'rep-neutral';
+
+  // Law pill — only shown when a law is active
+  const pill = document.getElementById('law-pill');
+  const pillName = document.getElementById('law-pill-name');
+  if (briefing.activeLaw) {
+    pillName.textContent = briefing.activeLaw.name;
+    pill.style.display = 'flex';
+    document.getElementById('law-sep').style.display = '';
+  } else {
+    pill.style.display = 'none';
+    document.getElementById('law-sep').style.display = 'none';
+  }
 }
 
 function getCorporationName() {
@@ -877,6 +957,7 @@ function updateLogPanel() {
   }
   renderMessages();
   renderPendingTrades();
+  renderLawTab();
   if ((briefing.pendingTrades?.length || 0) > 0) showBadge('trade');
 }
 
@@ -1411,6 +1492,82 @@ async function submitFreeAction(freeAction) {
   } catch (_) {}
 }
 
+// ── Laws & lobbying ────────────────────────────────────────────────────────────
+let selectedLawId = null;
+
+function renderLawTab() {
+  if (!briefing) return;
+  const tick = briefing.tick ?? 0;
+  const isPariah = briefing.reputationLabel === 'Pariah';
+  const laws = briefing.laws || [];
+
+  // Phase countdown: next vote fires when tick % 10 === 0
+  const nextVoteTick = Math.ceil((tick + 1) / 10) * 10;
+  const ticksLeft = nextVoteTick - tick;
+  const phaseEl = document.getElementById('law-phase-info');
+  if (phaseEl) phaseEl.textContent = `VOTE IN ${ticksLeft} TICK${ticksLeft === 1 ? '' : 'S'}`;
+
+  const listEl = document.getElementById('laws-list');
+  if (!listEl) return;
+
+  if (laws.length === 0) {
+    listEl.innerHTML = '<div style="color:#374151;font-size:10px;padding:8px 0">No laws in this season</div>';
+    document.getElementById('lobby-submit-btn').disabled = true;
+    return;
+  }
+
+  listEl.innerHTML = laws.map(law => {
+    const isActive = law.is_active === 1;
+    const isSelected = selectedLawId === law.id;
+    const effectLabel = LAW_EFFECT_LABELS[law.effect] || law.effect;
+    return `<div class="law-row" style="${isSelected ? 'background:rgba(251,191,36,0.06);border-radius:4px;padding:6px 4px;' : ''}">
+      <input type="radio" name="law-vote" value="${esc(law.id)}"
+        id="law-radio-${esc(law.id)}"
+        ${isPariah ? 'disabled' : ''}
+        ${isSelected ? 'checked' : ''}
+        onchange="selectedLawId='${esc(law.id)}'; renderLawTab();"
+        style="accent-color:#fbbf24; cursor:${isPariah ? 'not-allowed' : 'pointer'};">
+      <div class="law-row-info">
+        <div class="law-row-name">
+          ${esc(law.name)}
+          ${isActive ? '<span class="law-active-badge">ACTIVE</span>' : ''}
+        </div>
+        <div class="law-row-effect">${esc(effectLabel)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const creditsInput = document.getElementById('lobby-credits-input');
+  const submitBtn = document.getElementById('lobby-submit-btn');
+  if (submitBtn) submitBtn.disabled = isPariah || !selectedLawId;
+}
+
+async function sendLobbyVote() {
+  if (!selectedLawId) return;
+  const credits = parseInt(document.getElementById('lobby-credits-input')?.value) || 0;
+  if (credits <= 0) {
+    const s = document.getElementById('lobby-status');
+    if (s) s.textContent = 'Enter credits to spend.';
+    return;
+  }
+  try {
+    await submitFreeAction({ type: 'lobby', lawId: selectedLawId, credits });
+    const s = document.getElementById('lobby-status');
+    if (s) { s.style.color = '#4ade80'; s.textContent = `✓ Lobbied ${credits}cr for ${briefing.laws?.find(l => l.id === selectedLawId)?.name ?? 'selected law'}`; }
+  } catch (_) {}
+}
+
+// Human-readable descriptions for law effects
+const LAW_EFFECT_LABELS = {
+  'data_sovereignty_act':   'Data Centers yield +20% intelligence',
+  'martial_law':            'Attacks cost −1 energy; Sabotage disabled',
+  'free_market_decree':     'Trade broker fee waived for all',
+  'infrastructure_investment': 'All districts yield +1 per type',
+  'corporate_transparency': 'Covert ops cost +50% influence',
+  'energy_rationing':       'Power Grids yield −1 energy; attacks cost +1',
+  'surveillance_state':     'Counter-intelligence free; Sabotage costs +1 influence',
+};
+
 // ── SVG city map ───────────────────────────────────────────────────────────────
 // 24 districts in a 6x4 grid. Irregular quad polygons sharing exact edge vertices.
 // Vertex grid (7 cols × 5 rows):
@@ -1709,10 +1866,13 @@ function connectWs() {
         queuedPrimary = null;
         queuedFreeActions = [];
         notifDismissedTick = -1;
+        selectedLawId = null;
         if (msg.nextTickAt) startTimer(msg.nextTickAt);
         await loadWorld();
         await loadBriefing();
         showNewspaper(briefing);
+        // If a new law was just enacted, badge the LAWS tab
+        if (briefing?.activeLaw) showBadge('laws');
         // Flash log tab bar border briefly
         document.getElementById('log-tab-bar').style.borderTopColor = '#00f5c4';
         setTimeout(() => { document.getElementById('log-tab-bar').style.borderTopColor = ''; }, 800);

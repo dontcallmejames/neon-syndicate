@@ -1,11 +1,10 @@
 // src/game/actions/covert.js
 const { writeEvent } = require('../events');
+const { getActiveLaw } = require('../laws');
 
 function getFortifyCreditCost(db, seasonId) {
-  const law = db.prepare(
-    "SELECT id FROM laws WHERE season_id = ? AND is_active = 1 AND effect = 'fortify_discount' LIMIT 1"
-  ).get(seasonId);
-  return law ? 4 : 8;
+  const law = getActiveLaw(db, seasonId);
+  return law?.effect === 'fortify_discount' ? 4 : 8;
 }
 
 function resolveCovert(db, seasonId, tick, covertActions) {

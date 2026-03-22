@@ -15,6 +15,11 @@ function resolveAlliances(db, seasonId, tick, allianceActions) {
 
     if (action.type === 'propose_alliance') {
       const targetId = action.targetCorpId;
+      if (!targetId) continue;
+      const targetExists = db.prepare(
+        'SELECT id FROM corporations WHERE id = ? AND season_id = ?'
+      ).get(targetId, seasonId);
+      if (!targetExists) continue;
       // Check not already allied and < 3 active alliances
       if (activeAllianceCount(db, corpId) >= 3) continue;
       const existing = db.prepare(`

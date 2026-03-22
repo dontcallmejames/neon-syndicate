@@ -1,4 +1,5 @@
 // src/db/schema.js
+const crypto = require('crypto');
 const { getDb } = require('./index');
 
 function initDb(db) {
@@ -152,6 +153,20 @@ function initDb(db) {
     conn.exec("ALTER TABLE seasons ADD COLUMN last_tick_at INTEGER NOT NULL DEFAULT 0");
   } catch (_) { /* column already exists — safe to ignore */ }
   conn.pragma('foreign_keys = ON');
+
+  // Migrate any plaintext UUID api_keys to SHA-256 hashes.
+  // UUIDs are 36 chars; hashes are 64 — length distinguishes them.
+  const plaintext = conn.prepare(
+    "SELECT id, api_key FROM corporations WHERE length(api_key) != 64"
+  ).all();
+  if (plaintext.length > 0) {
+    const update = conn.prepare('UPDATE corporations SET api_key = ? WHERE id = ?');
+    conn.transaction(() => {
+      for (const row of plaintext) {
+        update.run(crypto.createHash('sha256').update(row.api_key).digest('hex'), row.id);
+      }
+    })();
+  }
 }
 
 module.exports = { initDb };

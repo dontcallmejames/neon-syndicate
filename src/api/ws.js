@@ -1,5 +1,6 @@
 // src/api/ws.js
 const WebSocket = require('ws');
+const logger = require('../lib/logger');
 
 let _wss = null;
 
@@ -31,7 +32,7 @@ function broadcast(message) {
   try {
     text = JSON.stringify(message);
   } catch (err) {
-    console.warn('[ws] broadcast serialize error:', err.message);
+    logger.warn('ws', 'broadcast serialize error', { err: err.message });
     return;
   }
   for (const client of _wss.clients) {
@@ -39,7 +40,7 @@ function broadcast(message) {
       try {
         client.send(text);
       } catch (err) {
-        console.warn('[ws] broadcast send error:', err.message);
+        logger.warn('ws', 'broadcast send error', { err: err.message });
       }
     }
   }

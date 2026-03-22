@@ -1,4 +1,7 @@
 // src/game/actions/resolve.js
+const { getActiveLaw } = require('../laws');
+const { PARIAH_THRESHOLD } = require('../reputation');
+const { PRIMARY_BASE_COSTS } = require('./costs');
 const { applyFeared } = require('../feared');
 const { checkPhase } = require('../phase');
 const { validateActions } = require('./validate');
@@ -37,9 +40,7 @@ function resolveActions(db, seasonId, tick) {
   // Nullify covert actions targeting CI corps; consume their costs
   const nullifiedRowIds = new Set();
   if (ciCorpIds.size > 0) {
-    const activeLaw = db.prepare(
-      'SELECT effect FROM laws WHERE season_id = ? AND is_active = 1'
-    ).get(seasonId);
+    const activeLaw = getActiveLaw(db, seasonId);
 
     for (const row of pendingRows) {
       const parsed = JSON.parse(row.parsed_actions);
@@ -54,10 +55,11 @@ function resolveActions(db, seasonId, tick) {
 
       // Nullify: consume costs, mark as resolved, skip execution
       const corp = db.prepare('SELECT * FROM corporations WHERE id = ?').get(row.corp_id);
-      const isPariah = corp.reputation < 15;
-      let energyCost = pa.type === 'sabotage' ? 4 : pa.type === 'leak_scandal' ? 2 : 8;
-      const creditCost = pa.type === 'sabotage' ? 15 : pa.type === 'leak_scandal' ? 10 : 15;
-      let influenceCost = isPariah ? 0 : (pa.type === 'corporate_assassination' ? 10 : 5);
+      const isPariah = corp.reputation < PARIAH_THRESHOLD;
+      const baseCosts = PRIMARY_BASE_COSTS[pa.type];
+      let energyCost = baseCosts.energy;
+      const creditCost = baseCosts.credits;
+      let influenceCost = isPariah ? 0 : baseCosts.influence;
 
       // Apply law modifiers (same logic as validate.js)
       if (activeLaw?.effect === 'security_lockdown' && pa.type !== 'corporate_assassination') {
@@ -118,7 +120,7 @@ function resolveActions(db, seasonId, tick) {
   for (const { row, parsed } of Object.values(validActions)) {
     const primaryAction = parsed.primaryAction;
     if (primaryAction && primaryAction.type === 'counter_intelligence') {
-      db.prepare('UPDATE corporations SET energy = energy - 3, influence = influence - 5 WHERE id = ?')
+      db.prepare('UPDATE corporations SET energy = MAX(0, energy - 3), influence = MAX(0, influence - 5) WHERE id = ?')
         .run(row.corp_id);
     }
   }

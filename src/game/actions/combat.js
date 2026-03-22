@@ -1,5 +1,7 @@
 // src/game/actions/combat.js
 const { writeEvent } = require('../events');
+const { getActiveLaw } = require('../laws');
+const { PRIMARY_BASE_COSTS } = require('./costs');
 
 // Workforce contribution to combat is capped — only so many workers can be
 // deployed in a single battle regardless of total holdings. This prevents
@@ -34,11 +36,12 @@ function computeDefenseStrength(db, district, defender) {
 }
 
 function getClaimCosts(db, seasonId) {
-  const law = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1 ORDER BY rowid LIMIT 1").get(seasonId);
+  const { energy, credits } = PRIMARY_BASE_COSTS.claim;
+  const law = getActiveLaw(db, seasonId);
   if (law && law.effect === 'open_borders') {
-    return { energy: Math.floor(3 * 0.5), credits: Math.floor(5 * 0.5) };
+    return { energy: Math.floor(energy * 0.5), credits: Math.floor(credits * 0.5) };
   }
-  return { energy: 3, credits: 5 };
+  return { energy, credits };
 }
 
 function resolveCombat(db, seasonId, tick, combatActions) {

@@ -1,6 +1,7 @@
 // src/game/actions/trades.js
 const crypto = require('crypto');
 const { writeEvent } = require('../events');
+const { getActiveLaw } = require('../laws');
 
 const RESOURCE_COL_MAP = {
   credits: 'credits',
@@ -33,8 +34,8 @@ function isEmbargoed(db, corpId, targetId, tick) {
 }
 
 function resolveTrades(db, seasonId, tick, tradeActions) {
-  const law = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1 ORDER BY rowid LIMIT 1").get(seasonId);
-  const freeTradeActive = law && law.effect === 'free_trade';
+  const law = getActiveLaw(db, seasonId);
+  const freeTradeActive = law?.effect === 'free_trade';
 
   outer: for (const { corpId, action } of tradeActions) {
 

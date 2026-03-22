@@ -1,24 +1,7 @@
 // src/game/actions/validate.js
-
-const PRIMARY_BASE_COSTS = {
-  claim:                   { energy: 3, credits: 5,  influence: 0 },
-  attack:                  { energy: null, credits: 10, influence: 0 }, // energy = energySpent
-  fortify:                 { energy: 2, credits: 8,  influence: 0 },
-  sabotage:                { energy: 4, credits: 15, influence: 5 },
-  leak_scandal:            { energy: 2, credits: 10, influence: 5 },
-  counter_intelligence:    { energy: 3, credits: 0,  influence: 5 },
-  corporate_assassination: { energy: 8, credits: 15, influence: 10 },
-};
-
-const COVERT_OPS = ['sabotage', 'leak_scandal', 'corporate_assassination'];
-
-function getActiveLawEffect(db, seasonId) {
-  const laws = db.prepare("SELECT effect FROM laws WHERE season_id = ? AND is_active = 1").all(seasonId);
-  if (laws.length > 1) {
-    console.warn(`[validate] Multiple active laws for season ${seasonId} — using first`);
-  }
-  return laws.length > 0 ? laws[0].effect : null;
-}
+const { getActiveLaw } = require('../laws');
+const { PARIAH_THRESHOLD } = require('../reputation');
+const { PRIMARY_BASE_COSTS, COVERT_OPS } = require('./costs');
 
 function computePrimaryEnergyCost(actionType, action, lawEffect, db) {
   if (actionType === 'attack') {
@@ -57,8 +40,8 @@ function computePrimaryInfluenceCost(actionType, lawEffect, isPariah) {
 
 function validateActions(db, corp, parsedActions, tick) {
   const { primaryAction, freeActions = [] } = parsedActions;
-  const isPariah = corp.reputation < 15;
-  const lawEffect = getActiveLawEffect(db, corp.season_id);
+  const isPariah = corp.reputation < PARIAH_THRESHOLD;
+  const lawEffect = getActiveLaw(db, corp.season_id)?.effect || null;
 
   let totalEnergy = 0;
   let totalCredits = 0;

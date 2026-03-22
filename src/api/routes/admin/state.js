@@ -1,4 +1,6 @@
 // src/api/routes/admin/state.js
+const { getActiveLaw } = require('../../../game/laws');
+
 module.exports = function adminStateHandler(db) {
   return (req, res) => {
     const SEASON_COLS = 'id, status, tick_count, season_length, tick_interval_ms, is_ticking, scoring_weights, starting_resources, created_at';
@@ -48,9 +50,7 @@ module.exports = function adminStateHandler(db) {
       ORDER BY d.rowid ASC
     `).all(season.id);
 
-    const activeLaw = db.prepare(
-      'SELECT id, name, effect FROM laws WHERE season_id = ? AND is_active = 1'
-    ).get(season.id) || null;
+    const activeLaw = getActiveLaw(db, season.id);
 
     const recentEvents = db.prepare(
       "SELECT id, type, tick, narrative FROM events WHERE season_id = ? ORDER BY tick DESC, rowid DESC LIMIT 10"

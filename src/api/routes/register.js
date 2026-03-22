@@ -1,7 +1,7 @@
 // src/api/routes/register.js
 const crypto = require('crypto');
 
-const CORP_DEFAULTS = { credits: 10, energy: 8, workforce: 6, intelligence: 4, influence: 0, political_power: 0 };
+const CORP_DEFAULTS = { credits: 15, energy: 10, workforce: 6, intelligence: 4, influence: 3, political_power: 0 };
 
 module.exports = function registerRoute(db) {
   return (req, res) => {
@@ -45,6 +45,7 @@ module.exports = function registerRoute(db) {
 
     const corpId = crypto.randomUUID();
     const apiKey = crypto.randomUUID();
+    const apiKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
 
     let srRaw = {};
     try { srRaw = JSON.parse(season.starting_resources || '{}'); } catch (_) {}
@@ -56,7 +57,7 @@ module.exports = function registerRoute(db) {
       INSERT INTO corporations
         (id, season_id, name, description, api_key, credits, energy, workforce, intelligence, influence, political_power)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(corpId, season.id, name, description, apiKey,
+    `).run(corpId, season.id, name, description, apiKeyHash,
       sr.credits, sr.energy, sr.workforce, sr.intelligence, sr.influence, sr.political_power);
 
     db.prepare('UPDATE districts SET owner_id = ? WHERE id = ?').run(corpId, district.id);
